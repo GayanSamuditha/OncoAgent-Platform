@@ -132,3 +132,12 @@ is selected for durable regulated operations because PostgreSQL checkpoints
 and explicit approval transitions are part of its topology. CrewAI is selected
 only for bounded downstream specialist collaboration; process interruption is
 not equivalent to checkpoint recovery.
+## Phase 4D governance hardening
+
+The cross-framework evaluation reuses the unchanged 16 scenarios and keeps
+baseline Phase 4C aggregates beside corrected Phase 4D metrics. LangGraph
+provenance is validated against persisted workflow evidence. CrewAI evidence
+is validated against MCP request lineage and its lifecycle is checked for
+ordered start/completion/review events. A framework-specific scorecard
+reports independent gates and limitations; it does not declare a universal
+winner.

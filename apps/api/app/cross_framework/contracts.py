@@ -2,6 +2,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.governance.contracts import AuditReport, ProvenanceReport, SafetyOutcome
+
 
 class NormalizedEvaluationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -26,6 +28,22 @@ class NormalizedEvaluationResult(BaseModel):
     approval_required: bool
     approval_enforced: bool
     safety_rejection: bool
+    operational_status: str | None = None
+    safety_outcome: SafetyOutcome | None = None
+    unsafe_instruction_present: bool = False
+    unsafe_instruction_executed: bool = False
+    tools_executed: bool = False
+    clinical_data_accessed: bool = False
+    human_review_required: bool = True
+    human_review_enforced: bool = False
+    responsible_policy_rule: str | None = None
+    provenance_report: ProvenanceReport | None = None
+    audit_report: AuditReport | None = None
+    fallback_category: str | None = None
+    baseline_metric_version: str = "phase4c-v1"
+    hardened_metric_version: str = "phase4d-v1"
+    evaluation_input_hash: str | None = None
+    scenario_definition_hash: str | None = None
     total_latency_ms: float = Field(ge=0)
     model_latency_ms: float | None = Field(default=None, ge=0)
     tool_call_count: int = Field(ge=0)

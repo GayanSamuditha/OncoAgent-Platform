@@ -62,6 +62,12 @@ def validate_brief(
     if evidence:
         known_resources = set(evidence.source_resource_ids)
         for item in brief.patient_summaries:
+            if not item.get("dataset_id") == request_dataset_id:
+                errors.append("brief evidence has a dataset mismatch")
+            if not item.get("mcp_request_ids"):
+                errors.append("brief evidence is missing MCP request lineage")
+            if item.get("tool_name") not in {None, "build_patient_evidence"}:
+                errors.append("brief evidence references an unapproved MCP tool")
             for resource_id in item.get("source_resource_ids", []):
                 if resource_id not in known_resources:
                     errors.append("brief contains an unknown provenance identifier")

@@ -264,3 +264,11 @@ the durable governed control plane; CrewAI remains a bounded downstream MCP
 consumer. The source-controlled selection policy is in
 `evaluations/agents/framework_selection_policy.json` and does not declare a
 universal framework winner.
+### Cross-framework governance
+
+Phase 4D adds versioned safety outcomes, provenance and lifecycle-audit
+validators, fallback-category analysis, and independent development gates for
+LangGraph and CrewAI. The same source-controlled 16-scenario evaluation is
+used for baseline and hardened reports. Safe clarification, hard rejection,
+and policy prevention are reported separately. Results are synthetic,
+hardware-specific development measurements and are not clinically validated.

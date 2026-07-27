@@ -48,6 +48,9 @@ class CrewExecutionService:
                     "source_resource_ids": result.result.get("facts", {}).get(
                         "source_resource_ids", []
                     ),
+                    "mcp_request_ids": [result.request_id],
+                    "dataset_id": request.dataset_id,
+                    "tool_name": result.tool_name,
                 }
             )
         brief = SyntheticResearchBrief(
@@ -75,7 +78,7 @@ class CrewExecutionService:
             mcp_lineage={"request_ids": getattr(self.client, "request_ids", [])},
             review_status="awaiting_human_review",
         )
-        validate_brief(brief, run_id, request.dataset_id)
+        validate_brief(brief, run_id, request.dataset_id, evidence=None)
         return brief
 
     def run(self, request: CrewRunRequest, run_id: str) -> SyntheticResearchBrief:
@@ -101,6 +104,7 @@ class CrewExecutionService:
             self.last_execution = {
                 "used_fallback": False,
                 "fallback_reason": None,
+                "fallback_category": None,
                 "task_summaries": summarize_task_outputs(result),
             }
             validate_brief(brief, run_id, request.dataset_id)
@@ -111,6 +115,7 @@ class CrewExecutionService:
             self.last_execution = {
                 "used_fallback": True,
                 "fallback_reason": type(exc).__name__,
+                "fallback_category": _fallback_category(exc),
                 "task_summaries": {},
             }
             return self.deterministic_run(request, run_id)
@@ -127,3 +132,20 @@ class CrewExecutionService:
             sort_keys=True,
         )
         return hashlib.sha256(value.encode()).hexdigest()
+
+
+def _fallback_category(exc: Exception) -> str:
+    text = str(exc).lower()
+    if "mcp" in text or "connection" in text:
+        return "mcp_unavailable"
+    if "timeout" in text or "timed out" in text:
+        return "timeout"
+    if "model" in text or "ollama" in text:
+        return "model_unavailable"
+    if "provenance" in text:
+        return "missing_provenance"
+    if "brief" in text or "consisten" in text:
+        return "final_brief_inconsistency"
+    if "schema" in text or "validation" in text:
+        return "schema_validation_failure"
+    return "other"

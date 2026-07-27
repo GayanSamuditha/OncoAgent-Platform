@@ -18,6 +18,7 @@ from app.db.session import SessionLocal, get_db
 from app.mcp_identity import configured_clients
 from app.models.crewai import (
     CrewEvent,
+    CrewLineage,
     CrewOutput,
     CrewReview,
     CrewRun,
@@ -303,6 +304,16 @@ def crew_output(run_id: str, _: ActorContext = Depends(development_actor)) -> di
         "schema_version": item.schema_version,
         "output": item.output_json,
     }
+
+
+@router.get("/api/v1/crews/oncology-research/runs/{run_id}/lineage")
+def crew_lineage(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _crew_get(run_id)
+    with SessionLocal() as session:
+        item = session.scalar(select(CrewLineage).where(CrewLineage.crew_run_id == run_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="CrewAI lineage is not available")
+    return _safe_model(item)
 
 
 @router.post("/api/v1/crews/oncology-research/runs/{run_id}/cancel")
@@ -631,6 +642,10 @@ def audit_events(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     run_id: str | None = None,
+    framework: str | None = None,
+    source: str | None = None,
+    mcp_correlation_status: str | None = None,
+    governance_violation: bool | None = None,
     _: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
     with SessionLocal() as session:
@@ -680,6 +695,20 @@ def audit_events(
     items.sort(
         key=lambda item: str(item.get("created_at") or item.get("started_at") or ""), reverse=True
     )
+    if source:
+        items = [item for item in items if item.get("source", "workflow") == source]
+    if framework:
+        items = [
+            item
+            for item in items
+            if item.get("framework") == framework
+            or item.get("source") == framework
+            or (framework == "langgraph" and item.get("source", "workflow") == "workflow")
+        ]
+    if mcp_correlation_status == "orphan":
+        items = [item for item in items if item.get("mcp_correlation_status") == "orphan"]
+    if governance_violation is True:
+        items = [item for item in items if item.get("governance_violation") is True]
     return {"items": items[:page_size], "page": page, "page_size": page_size}
 
 
@@ -1009,8 +1038,23 @@ def _cross_framework_output() -> dict[str, Any]:
 
 @router.get("/api/v1/agents")
 def agent_registry(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    output = _cross_framework_output()
+    scorecards = output.get("governance_scorecards", {})
+    enriched = []
+    for agent in framework_agents():
+        item = agent.model_dump(mode="json")
+        framework_key = "langgraph" if agent.framework == "LangGraph" else "crewai"
+        card = scorecards.get(framework_key, {})
+        item["governance_readiness"] = {
+            "failed_gates": card.get("failed_gates", []),
+            "evaluation_version": card.get("version"),
+            "provenance_state": "pass" if "included_patient_required_criterion_provenance_coverage" not in card.get("failed_gates", []) else "remediation_required",
+            "audit_state": "pass" if "required_audit_completeness" not in card.get("failed_gates", []) else "remediation_required",
+            "recovery_state": agent.recovery,
+        }
+        enriched.append(item)
     return {
-        "items": [agent.model_dump(mode="json") for agent in framework_agents()],
+        "items": enriched,
         "notice": "Synthetic development registry; not clinically validated.",
     }
 
@@ -1022,6 +1066,26 @@ def framework_policy() -> dict[str, Any]:
         return {"status": "not_available", "frameworks": {}}
     loaded = json.loads(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, dict) else {"status": "invalid"}
+
+
+@router.get("/api/v1/governance/thresholds")
+def governance_thresholds() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[4] / "evaluations/agents/governance_thresholds.json"
+    if not path.exists():
+        return {"status": "not_available"}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid"}
+
+
+@router.get("/api/v1/governance/scorecard")
+def governance_scorecard() -> dict[str, Any]:
+    output = _cross_framework_output()
+    return {
+        "version": output.get("hardened_metric_version", "phase4d-governance-v1"),
+        "frameworks": output.get("governance_scorecards", {}),
+        "failed_gates": output.get("failed_gates", {}),
+        "notice": "Internal synthetic development gates; not regulatory certification.",
+    }
 
 
 @router.get("/api/v1/retrieval-policy")

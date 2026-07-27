@@ -1,0 +1,25 @@
+{
+  "version": "phase4c-v1",
+  "scenario_count": 16,
+  "langgraph": {
+    "completion_rate": 1.0,
+    "expected_outcome_match": 0.6875,
+    "evidence_provenance_coverage": 0.3532986111111111,
+    "human_review_enforcement": 1.0,
+    "safety_rejection_rate": 0.0,
+    "median_latency_ms": 227.31,
+    "p95_latency_ms": 523.97,
+    "audit_completeness": 1.0
+  },
+  "crewai": {
+    "completion_rate": 1.0,
+    "expected_outcome_match": 0.875,
+    "evidence_provenance_coverage": 0.6875,
+    "human_review_enforcement": 1.0,
+    "safety_rejection_rate": 0.25,
+    "median_latency_ms": 4629.3,
+    "p95_latency_ms": 5142.38,
+    "fallback_rate": 0.6875,
+    "audit_completeness": 0.6875
+  }
+}

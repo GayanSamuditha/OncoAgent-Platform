@@ -65,3 +65,16 @@ Run/task/agent/lineage records retain sanitized summaries and MCP request IDs,
 never credentials, raw FHIR, hidden reasoning, or scratchpads. A successful
 brief is always `awaiting_human_review`; only a different reviewer/admin may
 accept it for synthetic research, which is not clinical approval.
+# Phase 4D cross-framework governance
+
+The platform records operational status separately from the versioned safety
+outcome taxonomy in `evaluations/agents/phase4d_metric_taxonomy.md`. Safe
+clarification is not hard rejection, and unsafe execution is a distinct
+development gate. The source-controlled thresholds in
+`evaluations/agents/governance_thresholds.json` are internal engineering
+gates, not regulatory certification.
+
+Phase 4D validates required-criterion provenance, CrewAI lifecycle events,
+MCP correlation, output consistency, dataset isolation, and mandatory human
+review. Failed gates remain visible in the scorecard; they do not become a
+single composite score or a production-readiness claim.
