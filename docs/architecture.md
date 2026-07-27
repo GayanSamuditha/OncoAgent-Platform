@@ -28,6 +28,10 @@ flowchart LR
     API --> Logs[Structured JSON logs]
 ```
 
+## Phase 2 retrieval architecture
+
+Normalized Phase 1 facts feed deterministic encounter documents, tokenizer-aware chunks, BioClinicalBERT mean-pooled and L2-normalized vectors, and exact pgvector search. Model loading is lazy, so health endpoints remain available when weights are unavailable. Documents, chunks, and search results retain source-resource lineage.
+
 ## Future target architecture
 
 The planned vertical slice adds a bounded Synthea importer, normalized FHIR facts, BioClinicalBERT retrieval, and a LangGraph planner/executor workflow. Structured verification remains authoritative over semantic retrieval. Human approval gates cohort export, and lineage records connect agents, prompts, models, tools, data, and decisions.
@@ -43,7 +47,7 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | PostgreSQL and pgvector foundation | Implemented |
 | Bounded Synthea ingestion | Implemented |
 | Dataset and patient timeline APIs | Implemented |
-| BioClinicalBERT retrieval | Planned |
+| BioClinicalBERT retrieval | Implemented (bounded local development) |
 | LangGraph workflow | Planned |
 | Structured FHIR verification | Planned |
 | Human approval | Planned |

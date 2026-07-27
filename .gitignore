@@ -242,3 +242,8 @@ model_weights/
 *.pt
 *.pth
 embeddings/
+evaluation_outputs/
+.cache/
+huggingface_cache/
+transformers_cache/
+torch_cache/

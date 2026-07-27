@@ -1,0 +1,4 @@
+{
+  "description": "Synthetic development retrieval cases. Expected IDs are deliberately empty until a bounded dataset-specific ground truth is derived from structured facts.",
+  "cases": []
+}

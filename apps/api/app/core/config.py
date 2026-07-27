@@ -15,6 +15,13 @@ class Settings(BaseSettings):
         validation_alias="DATABASE_URL",
     )
     cors_origins: list[str] = ["http://localhost:3000"]
+    clinical_embedding_model: str = Field(default="emilyalsentzer/Bio_ClinicalBERT", validation_alias="CLINICAL_EMBEDDING_MODEL")
+    clinical_embedding_model_revision: str = Field(default="main", validation_alias="CLINICAL_EMBEDDING_MODEL_REVISION")
+    embedding_device: str = Field(default="auto", validation_alias="EMBEDDING_DEVICE")
+    embedding_max_sequence_length: int = Field(default=256, validation_alias="EMBEDDING_MAX_SEQUENCE_LENGTH")
+    embedding_token_overlap: int = Field(default=32, validation_alias="EMBEDDING_TOKEN_OVERLAP")
+    embedding_batch_size_mps: int = Field(default=8, validation_alias="EMBEDDING_BATCH_SIZE_MPS")
+    embedding_batch_size_cpu: int = Field(default=4, validation_alias="EMBEDDING_BATCH_SIZE_CPU")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore"

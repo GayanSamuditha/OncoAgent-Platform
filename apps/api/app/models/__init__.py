@@ -13,6 +13,12 @@ from app.models.ingestion import (
     Patient,
     Procedure,
 )
+from app.models.retrieval import (
+    ClinicalDocument,
+    ClinicalDocumentChunk,
+    ClinicalEmbedding,
+    IndexingRun,
+)
 
 __all__ = [
     "Condition",
@@ -26,4 +32,8 @@ __all__ = [
     "Observation",
     "Patient",
     "Procedure",
+    "ClinicalDocument",
+    "ClinicalDocumentChunk",
+    "ClinicalEmbedding",
+    "IndexingRun",
 ]
