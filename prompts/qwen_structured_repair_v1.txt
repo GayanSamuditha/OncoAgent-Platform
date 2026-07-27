@@ -1,0 +1,2 @@
+Return only a valid CohortPlan JSON object matching the supplied schema. Correct
+only the listed validation errors. Do not add tools, code, SQL, paths, or reasoning.
