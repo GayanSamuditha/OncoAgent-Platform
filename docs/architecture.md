@@ -38,6 +38,16 @@ Phase 3A adds one persistent `StateGraph` with typed JSON-serializable state: in
 
 The deterministic planner accepts explicit criteria and a bounded natural-language vocabulary. It cannot emit SQL, shell, filesystem paths, URLs, or unregistered tools. Retrieval is candidate generation only. Every required criterion is verified against normalized structured FHIR data before approval is requested. Evidence contains criterion status and source FHIR resource IDs, while raw FHIR JSON is not returned in workflow endpoints. Development actor headers simulate identity only; they are not production authentication.
 
+## Phase 3B local planning
+
+The workflow optionally calls `qwen3:8b` through a localhost-only Ollama
+`/api/chat` endpoint. Qwen receives the versioned CohortPlan JSON schema and
+returns no executable content. Pydantic validation, tool allowlists, dataset
+checks, and mandatory approval remain authoritative. If Ollama is disabled,
+unavailable, or produces invalid output, the deterministic planner is used and
+the fallback reason is recorded. Ollama is an external local process, never a
+FastAPI in-process model and never a browser-facing endpoint.
+
 ## Future target architecture
 
 The planned vertical slice adds a bounded Synthea importer, normalized FHIR facts, BioClinicalBERT retrieval, and a LangGraph planner/executor workflow. Structured verification remains authoritative over semantic retrieval. Human approval gates cohort export, and lineage records connect agents, prompts, models, tools, data, and decisions.
@@ -59,5 +69,7 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | LangGraph governed cohort workflow | Implemented (Phase 3A bounded local development) |
 | Structured FHIR verification and evidence provenance | Implemented (Phase 3A) |
 | Human approval interruption and resume | Implemented (Phase 3A) |
-| LLM-backed planning and cohort export | Planned |
+| Local Qwen structured planning with deterministic fallback | Implemented (Phase 3B bounded local development) |
+| Workflow Console, Approval Queue, Audit Explorer, Agent Catalog | Implemented (Phase 3B bounded local development) |
+| Hosted LLM planning and cohort export | Not implemented |
 | MCP/CrewAI interoperability | Planned |

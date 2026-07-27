@@ -23,3 +23,13 @@ Hybrid fusion and cross-encoder reranking are evaluated on the same bounded data
 ## Phase 3A workflow governance
 
 Workflow state is checkpointed in PostgreSQL by LangGraph and mirrored into application events, steps, tool calls, policy decisions, evidence, approval, and lineage tables. Only registered read-only tools may execute. Plans are Pydantic-validated and dataset-scoped. Inclusion requires every required criterion to be verified from normalized structured FHIR facts with provenance. Approval records are idempotent and finalization is terminal-state protected. The kill switch and cancellation path stop execution safely.
+
+## Phase 3B local planner governance
+
+Qwen is permitted only through a localhost Ollama runtime. The model receives
+synthetic request context and a strict CohortPlan JSON schema; it cannot select
+arbitrary tools or produce SQL, code, paths, URLs, mutations, approval
+decisions, or hidden reasoning. Structured output is validated and falls back
+to the deterministic bounded planner on local failure. Planner lineage records
+model digest, prompt hash/version, schema version, compatibility mode, timing,
+token counts when supplied, validation status, and fallback reason.

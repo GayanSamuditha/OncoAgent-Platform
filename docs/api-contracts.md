@@ -29,3 +29,17 @@ Workflow endpoints require development-only `X-Actor-Id` and `X-Actor-Role` head
 - `GET /api/v1/audit-events` and `GET /api/v1/workflow-policy` expose audit inspection and current execution controls.
 
 Workflow retrieval uses MedCPT, then BioClinicalBERT, then PostgreSQL FTS. The cross-encoder is not enabled automatically. Retrieved candidates are never final cohort members until normalized structured FHIR verification succeeds and a reviewer approves the interrupted run.
+
+## Phase 3B local planning and operations
+
+`GET /api/v1/models/planners`, `/models/planners/{provider_id}`, and
+`/models/local-runtime` report Qwen/Ollama availability without loading the
+model. `POST /api/v1/models/planners/qwen_local/smoke-test` is an admin-only,
+synthetic schema smoke test. Run creation accepts `planner_provider` values
+`auto`, `qwen_local`, and `deterministic`; `auto` records a Qwen attempt and
+falls back to the deterministic planner when needed. Run responses expose
+structured planner lineage, never hidden reasoning.
+
+The local console routes are `/workflow`, `/approvals`, `/audit`, and
+`/agent-catalog`. All displays are synthetic development views and not
+clinical validation.

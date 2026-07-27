@@ -1,13 +1,14 @@
 from datetime import datetime
 from typing import Any, Literal, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 CriterionType = Literal["minimum_age", "maximum_age", "gender", "condition", "observation", "procedure", "medication", "diagnostic_report", "encounter_type", "date_window"]
 CriterionStatus = Literal["verified", "not_verified", "conflicting", "missing_data", "not_applicable"]
 
 
 class Criterion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     criterion_id: str = Field(default_factory=lambda: "criterion")
     criterion_type: CriterionType
     clinical_concept: str | None = None
@@ -22,6 +23,7 @@ class Criterion(BaseModel):
 
 
 class CohortPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     objective: str
     dataset_id: str
     retrieval_query: str = Field(min_length=3, max_length=500)
@@ -44,6 +46,7 @@ class RunCreateRequest(BaseModel):
     request: str = Field(min_length=5, max_length=2000)
     criteria: list[Criterion] | None = Field(default=None, max_length=10)
     max_candidates: int = Field(default=20, ge=1, le=50)
+    planner_provider: Literal["auto", "qwen_local", "deterministic"] = "auto"
 
 
 class ApprovalDecisionRequest(BaseModel):
@@ -84,6 +87,7 @@ class WorkflowState(TypedDict, total=False):
     created_at: str
     updated_at: str
     final_result: dict[str, Any]
+    planner_lineage: dict[str, Any]
 
 
 class EvidenceItem(BaseModel):
@@ -117,6 +121,7 @@ class RunResponse(BaseModel):
     final_result: dict[str, Any] | None = None
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    planner_lineage: dict[str, Any] | None = None
     synthetic_data_notice: Literal["Synthetic Synthea data only."] = "Synthetic Synthea data only."
 
 

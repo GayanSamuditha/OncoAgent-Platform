@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 through Phase 3A are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, and a persistent LangGraph cohort workflow with structured FHIR verification, audit records, and reviewer approval interruption. These models are encoders/rankers, not generative models or clinical decision-makers, and are not clinically validated. LLM-backed planning, cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
+Phase 1 through Phase 3B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, and optional local Qwen planning through Ollama. Qwen is never loaded in FastAPI and has a strict Pydantic JSON-schema boundary with deterministic fallback. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
 
 Phase 2 smoke test:
 
@@ -146,6 +146,23 @@ Never remove or alter the Synthea archive directory as part of local cleanup.
 - If the frontend shows the backend as unavailable, confirm that the API is listening on port 8000 and that `NEXT_PUBLIC_API_BASE_URL` is correct.
 - If Docker cannot pull the pgvector image, check Docker Desktop connectivity; no application data is extracted or modified by the platform foundation.
 - If host port 5432 is occupied, set `POSTGRES_HOST_PORT=55432` and use the matching `DATABASE_URL` port.
+
+## Local Qwen planner
+
+Phase 3B uses only a local Ollama process. After installing Ollama, run:
+
+```bash
+ollama pull qwen3:8b
+ollama list
+ollama serve
+```
+
+The API sends only bounded synthetic planning context to
+`http://127.0.0.1:11434`, passes the `CohortPlan` JSON schema through Ollama's
+native `format` field, and validates the returned JSON before any tool can run.
+Qwen is not loaded in FastAPI and is not exposed to the browser. If Ollama is
+stopped or the model is missing, deterministic planning remains available and
+the run records the fallback. Stop Ollama when not testing to conserve memory.
 
 ## Safety and governance
 

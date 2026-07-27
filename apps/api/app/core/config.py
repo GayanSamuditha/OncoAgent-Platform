@@ -36,9 +36,24 @@ class Settings(BaseSettings):
     agent_execution_enabled: bool = Field(default=True, validation_alias="AGENT_EXECUTION_ENABLED")
     workflow_max_candidates: int = Field(default=50, validation_alias="WORKFLOW_MAX_CANDIDATES")
     workflow_tool_timeout_seconds: int = Field(default=10, validation_alias="WORKFLOW_TOOL_TIMEOUT_SECONDS")
+    local_llm_enabled: bool = Field(default=True, validation_alias="LOCAL_LLM_ENABLED")
+    local_llm_provider: str = Field(default="ollama", validation_alias="LOCAL_LLM_PROVIDER")
+    local_llm_base_url: str = Field(default="http://127.0.0.1:11434", validation_alias="LOCAL_LLM_BASE_URL")
+    local_llm_model: str = Field(default="qwen3:8b", validation_alias="LOCAL_LLM_MODEL")
+    local_llm_timeout_seconds: int = Field(default=60, ge=1, le=300, validation_alias="LOCAL_LLM_TIMEOUT_SECONDS")
+    local_llm_max_retries: int = Field(default=1, ge=0, le=2, validation_alias="LOCAL_LLM_MAX_RETRIES")
+    local_llm_temperature: float = Field(default=0.0, ge=0, le=1, validation_alias="LOCAL_LLM_TEMPERATURE")
+    local_llm_context_length: int = Field(default=8192, ge=256, le=32768, validation_alias="LOCAL_LLM_CONTEXT_LENGTH")
+    local_llm_max_output_tokens: int = Field(default=1024, ge=64, le=4096, validation_alias="LOCAL_LLM_MAX_OUTPUT_TOKENS")
+    local_llm_keep_alive: str = Field(default="5m", validation_alias="LOCAL_LLM_KEEP_ALIVE")
+    local_llm_thinking: bool = Field(default=False, validation_alias="LOCAL_LLM_THINKING")
+    local_llm_require_structured_output: bool = Field(default=True, validation_alias="LOCAL_LLM_REQUIRE_STRUCTURED_OUTPUT")
+    local_llm_max_response_bytes: int = Field(default=1048576, ge=1024, le=10485760, validation_alias="LOCAL_LLM_MAX_RESPONSE_BYTES")
+    planner_default_provider: str = Field(default="qwen_local", validation_alias="PLANNER_DEFAULT_PROVIDER")
+    planner_fallback_provider: str = Field(default="deterministic", validation_alias="PLANNER_FALLBACK_PROVIDER")
 
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore"
+        env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore", populate_by_name=True
     )
 
 

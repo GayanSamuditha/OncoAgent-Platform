@@ -26,7 +26,12 @@ from app.workflow.audit import (
     tool_call,
     update_run,
 )
-from app.workflow.planner import DeterministicCohortPlanner, plan_to_dict
+from app.workflow.planner import (
+    DeterministicCohortPlanner,
+    LocalPlannerError,
+    OllamaQwenPlannerProvider,
+    plan_to_dict,
+)
 from app.workflow.schemas import CohortPlan, Criterion, WorkflowState
 from app.workflow.tools import (
     ToolExecutionContext,
@@ -68,15 +73,31 @@ def intake(state: WorkflowState) -> dict[str, Any]:
 
 def create_plan(state: WorkflowState) -> dict[str, Any]:
     _node_started(state, "create_plan")
+    planner_lineage: dict[str, Any] = {}
+    requested_provider = state.get("structured_input", {}).get("planner_provider", "auto")
     try:
         criteria = [Criterion.model_validate(item) for item in state.get("structured_input", {}).get("criteria", [])] or None
-        plan = DeterministicCohortPlanner().plan(state["original_request"], state["dataset_id"], criteria, int(state["structured_input"].get("max_candidates", 20)))
-    except (ValueError, TypeError) as exc:
+        max_candidates = int(state["structured_input"].get("max_candidates", 20))
+        if requested_provider in {"auto", "qwen_local"}:
+            local_provider = OllamaQwenPlannerProvider(get_settings())
+            try:
+                outcome = local_provider.generate_cohort_plan(state["original_request"], state["dataset_id"], criteria, max_candidates)
+                plan, planner_lineage = outcome.plan, outcome.lineage
+                planner_provider = "qwen_local"
+            except LocalPlannerError as exc:
+                planner_lineage = {**local_provider.health(), **exc.lineage, "failure_category": exc.category, "fallback_reason": str(exc), "fallback_to": "deterministic"}
+                event(state["run_id"], state["run_id"], "planner_fallback", "create_plan", {"from": "qwen_local", "to": "deterministic", "reason": exc.category})
+                plan = DeterministicCohortPlanner().plan(state["original_request"], state["dataset_id"], criteria, max_candidates)
+                planner_provider = "deterministic-cohort-planner-v1"
+        else:
+            plan = DeterministicCohortPlanner().plan(state["original_request"], state["dataset_id"], criteria, max_candidates)
+            planner_provider = "deterministic-cohort-planner-v1"
+    except (ValueError, TypeError, LocalPlannerError) as exc:
         return _fail(state, str(exc), "needs_clarification")
     plan_dict = plan_to_dict(plan)
-    update_run(state["run_id"], structured_plan=plan_dict, retrieval_policy={"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"})
-    lineage(state["run_id"], "planner", "deterministic-cohort-planner", "phase3a-planner-v1", {"plan_version": plan.plan_version})
-    return {"structured_plan": plan_dict, "plan_version": plan.plan_version, "planner_provider": "deterministic-cohort-planner-v1", "requested_criteria": [item.model_dump(mode="json") for item in plan.criteria], "retrieval_policy": {"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"}, "run_status": "validating_plan", "current_node": "create_plan", "updated_at": _utc()}
+    update_run(state["run_id"], structured_plan=plan_dict, planner_lineage=planner_lineage, retrieval_policy={"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"})
+    lineage(state["run_id"], "planner", planner_provider, str(planner_lineage.get("prompt_version", "phase3a-planner-v1")), planner_lineage | {"plan_version": plan.plan_version})
+    return {"structured_plan": plan_dict, "plan_version": plan.plan_version, "planner_provider": planner_provider, "planner_lineage": planner_lineage, "requested_criteria": [item.model_dump(mode="json") for item in plan.criteria], "retrieval_policy": {"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"}, "run_status": "validating_plan", "current_node": "create_plan", "updated_at": _utc()}
 
 
 def validate_plan(state: WorkflowState) -> dict[str, Any]:

@@ -237,6 +237,9 @@ node_modules/
 model_cache/
 model_caches/
 model_weights/
+ollama_models/
+*.gguf
+*.safetensors
 *.safetensors
 *.bin
 *.pt
@@ -249,3 +252,4 @@ workflow_outputs/
 huggingface_cache/
 transformers_cache/
 torch_cache/
+*.tsbuildinfo
