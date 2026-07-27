@@ -1,0 +1,15 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {"fullUrl": "Patient/p-1", "resource": {"resourceType": "Patient", "id": "p-1", "birthDate": "1980-01-02", "gender": "female"}},
+    {"fullUrl": "Encounter/e-1", "resource": {"resourceType": "Encounter", "id": "e-1", "status": "finished", "class": {"code": "AMB"}, "subject": {"reference": "Patient/p-1"}, "type": [{"coding": [{"system": "http://snomed.info/sct", "code": "123", "display": "Visit"}]}], "period": {"start": "2024-01-01T10:00:00Z", "end": "2024-01-01T11:00:00Z"}}},
+    {"fullUrl": "Condition/c-1", "resource": {"resourceType": "Condition", "id": "c-1", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "code": {"coding": [{"system": "http://snomed.info/sct", "code": "456", "display": "Synthetic condition"}]}, "onsetDateTime": "2024-01-01"}},
+    {"fullUrl": "Observation/o-1", "resource": {"resourceType": "Observation", "id": "o-1", "status": "final", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "code": {"coding": [{"system": "http://loinc.org", "code": "29463-7", "display": "Body weight"}]}, "valueQuantity": {"value": 70.5, "unit": "kg"}, "effectiveDateTime": "2024-01-02T12:00:00Z"}},
+    {"fullUrl": "Procedure/pr-1", "resource": {"resourceType": "Procedure", "id": "pr-1", "status": "completed", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "code": {"coding": [{"system": "http://snomed.info/sct", "code": "789", "display": "Synthetic procedure"}]}, "performedPeriod": {"start": "2024-01-03", "end": "2024-01-04"}}},
+    {"fullUrl": "MedicationRequest/m-1", "resource": {"resourceType": "MedicationRequest", "id": "m-1", "status": "active", "intent": "order", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "medicationCodeableConcept": {"coding": [{"system": "http://rxnorm.info", "code": "111", "display": "Synthetic medication"}]}, "authoredOn": "2024-01-05"}},
+    {"fullUrl": "DiagnosticReport/dr-1", "resource": {"resourceType": "DiagnosticReport", "id": "dr-1", "status": "final", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "code": {"coding": [{"system": "http://loinc.org", "code": "222", "display": "Synthetic report"}]}, "effectiveDateTime": "2024-01-06"}},
+    {"fullUrl": "ImagingStudy/is-1", "resource": {"resourceType": "ImagingStudy", "id": "is-1", "status": "available", "subject": {"reference": "Patient/p-1"}, "encounter": {"reference": "Encounter/e-1"}, "started": "2024-01-07", "description": "Synthetic imaging"}},
+    {"fullUrl": "AllergyIntolerance/a-1", "resource": {"resourceType": "AllergyIntolerance", "id": "a-1", "patient": {"reference": "Patient/p-1"}}}
+  ]
+}

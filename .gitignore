@@ -216,3 +216,29 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local data and platform artifacts
+.DS_Store
+synthea_1m_fhir_1_8/
+*.tar.gz
+data/raw/
+data/processed/
+generated_fhir/
+*.ndjson
+*.parquet
+postgres-data/
+oncoagent-postgres-data/
+
+# Frontend and local environments
+node_modules/
+.next/
+
+# ML artifacts and caches
+model_cache/
+model_caches/
+model_weights/
+*.safetensors
+*.bin
+*.pt
+*.pth
+embeddings/
