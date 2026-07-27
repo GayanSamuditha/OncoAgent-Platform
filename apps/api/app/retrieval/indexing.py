@@ -12,12 +12,13 @@ from app.models.retrieval import (
     IndexingRun,
 )
 from app.retrieval.chunking import CHUNKING_VERSION, chunk_text
-from app.retrieval.embeddings import POOLING_METHOD, EmbeddingProvider
+from app.retrieval.embeddings import DenseRetrievalProvider
 
 
-def index_documents(session: Session, provider: EmbeddingProvider, dataset_id: str, max_length: int, overlap: int, batch_size: int, limit: int | None = None) -> IndexingRun:
+def index_documents(session: Session, provider: DenseRetrievalProvider, dataset_id: str, max_length: int, overlap: int, batch_size: int, limit: int | None = None) -> IndexingRun:
     docs = list(session.scalars(select(ClinicalDocument).where(ClinicalDocument.dataset_id == dataset_id).order_by(ClinicalDocument.id).limit(limit or 100000)))
-    run = IndexingRun(id=str(uuid4()), dataset_id=dataset_id, model_name=provider.info.model_name, model_revision=provider.info.model_revision, status="running", requested_document_count=len(docs), batch_size=batch_size, device_type=provider.info.device, configuration={"max_length": max_length, "overlap": overlap, "chunking_version": CHUNKING_VERSION})
+    metadata = provider.metadata
+    run = IndexingRun(id=str(uuid4()), dataset_id=dataset_id, model_name=metadata.document_model_name, model_revision=metadata.document_model_revision, provider_id=metadata.provider_id, document_model_name=metadata.document_model_name, document_model_revision=metadata.document_model_revision, status="running", requested_document_count=len(docs), batch_size=batch_size, device_type=metadata.device, configuration={"max_length": max_length, "overlap": overlap, "chunking_version": CHUNKING_VERSION})
     session.add(run)
     session.commit()
     try:
@@ -30,12 +31,12 @@ def index_documents(session: Session, provider: EmbeddingProvider, dataset_id: s
                 session.flush()
             for start in range(0, len(chunks), batch_size):
                 batch = chunks[start:start + batch_size]
-                existing = {str(x.document_chunk_id) for x in session.scalars(select(ClinicalEmbedding).where(ClinicalEmbedding.document_chunk_id.in_([x.id for x in batch]), ClinicalEmbedding.model_revision == provider.info.model_revision, ClinicalEmbedding.pooling_method == POOLING_METHOD, ClinicalEmbedding.chunking_version == CHUNKING_VERSION))}
+                existing = {str(x.document_chunk_id) for x in session.scalars(select(ClinicalEmbedding).where(ClinicalEmbedding.document_chunk_id.in_([x.id for x in batch]), ClinicalEmbedding.provider_id == metadata.provider_id, ClinicalEmbedding.document_model_revision == metadata.document_model_revision, ClinicalEmbedding.pooling_method == metadata.pooling_strategy, ClinicalEmbedding.chunking_version == CHUNKING_VERSION))}
                 pending = [x for x in batch if x.id not in existing]
                 if pending:
-                    vectors = provider.embed([x.chunk_text for x in pending])
+                    vectors = provider.encode_documents([(document.title, x.chunk_text) for x in pending])
                     for chunk, vector in zip(pending, vectors, strict=True):
-                        session.add(ClinicalEmbedding(id=str(uuid4()), document_chunk_id=chunk.id, dataset_id=dataset_id, patient_id=document.patient_id, encounter_id=document.encounter_id, model_name=provider.info.model_name, model_revision=provider.info.model_revision, pooling_method=POOLING_METHOD, embedding_dimension=len(vector), chunking_version=CHUNKING_VERSION, document_builder_version=document.builder_version, device_type=provider.info.device, embedding=vector))
+                        session.add(ClinicalEmbedding(id=str(uuid4()), document_chunk_id=chunk.id, dataset_id=dataset_id, patient_id=document.patient_id, encounter_id=document.encounter_id, model_name=metadata.document_model_name, model_revision=metadata.document_model_revision, provider_id=metadata.provider_id, query_model_name=metadata.query_model_name, document_model_name=metadata.document_model_name, query_model_revision=metadata.query_model_revision, document_model_revision=metadata.document_model_revision, pooling_method=metadata.pooling_strategy, embedding_dimension=len(vector), normalization_strategy=metadata.normalization_strategy, query_max_length=metadata.query_max_length, document_max_length=metadata.document_max_length, representation_version="clinical-document-v2", chunking_version=CHUNKING_VERSION, document_builder_version=document.builder_version, device_type=metadata.device, embedding=vector))
                     run.created_embedding_count += len(pending)
                 run.skipped_embedding_count += len(existing)
             run.processed_document_count += 1

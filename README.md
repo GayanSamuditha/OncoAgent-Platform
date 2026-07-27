@@ -4,17 +4,18 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 and Phase 2 are implemented: bounded streaming Synthea FHIR ingestion plus deterministic clinical documents, tokenizer-aware chunks, BioClinicalBERT encoder embeddings, exact pgvector search, and provenance APIs. BioClinicalBERT is not generative, is not a clinical decision-maker, and is not clinically validated. LangGraph workflows, cohort search, and approval workflows are not implemented.
+Phase 1, Phase 2, and Phase 2.5 are implemented in bounded local form: deterministic clinical documents, tokenizer-aware chunks, model-agnostic retrieval providers, MedCPT dual-encoder support, BioClinicalBERT comparison support, PostgreSQL full-text baseline, exact pgvector search, and provenance APIs. These encoders are not generative, are not clinical decision-makers, and are not clinically validated. LangGraph workflows, cohort search, and approval workflows are not implemented.
 
 Phase 2 smoke test:
 
 ```bash
 apps/api/.venv/bin/python scripts/build_clinical_documents.py --dataset-id <dataset-id> --document-type encounter --limit 25
 apps/api/.venv/bin/python scripts/index_clinical_documents.py --dataset-id <dataset-id> --model emilyalsentzer/Bio_ClinicalBERT --batch-size 4 --limit 25
+apps/api/.venv/bin/python scripts/index_clinical_documents.py --dataset-id <dataset-id> --retrieval-provider medcpt --batch-size 4 --limit 25
 curl -X POST http://localhost:8000/api/v1/clinical-search -H 'content-type: application/json' -d '{"dataset_id":"<dataset-id>","query":"hypertension elevated blood pressure","top_k":5,"document_types":["encounter"]}'
 ```
 
-Local defaults are 256 tokens with 32-token overlap and exact pgvector search. Search scores are similarity scores, not clinical probabilities. Model weights, Hugging Face caches, generated embeddings, and evaluation outputs remain local-only and ignored by Git.
+MedCPT uses `ncbi/MedCPT-Query-Encoder` for queries and `ncbi/MedCPT-Article-Encoder` for documents, CLS pooling, 64-token query input, and 512-token document input. BioClinicalBERT remains available as a separate mean-pooling comparison profile. PostgreSQL full-text search is the non-neural baseline. Search scores are ranking signals, not clinical probabilities. MedCPT’s PubMed-oriented training domain is a limitation for synthetic FHIR phrasing. Model weights, Hugging Face caches, generated embeddings, and evaluation outputs remain local-only and ignored by Git.
 
 Only synthetic Synthea data is supported. Raw archives are local inputs and are ignored by Git.
 

@@ -39,6 +39,7 @@ class BuiltDocument:
     encounter_id: str | None
     document_type: str
     text: str
+    title: str
     source_resource_ids: list[str]
 
 
@@ -68,20 +69,23 @@ def build_encounter_document(session: Session, patient: Patient, encounter: Enco
     for title, values in sections:
         if values:
             lines.extend(["", f"{title}:", *values])
-    return BuiltDocument(str(patient.id), str(encounter.id), "encounter", "\n".join(lines), sorted(set(ids)))
+    title = f"{encounter.encounter_type_display or encounter.encounter_class or 'Unknown'} encounter on {_date(encounter.start_time)[:10]}"
+    return BuiltDocument(str(patient.id), str(encounter.id), "encounter", "\n".join(lines), title, sorted(set(ids)))
 
 
 def persist_document(session: Session, built: BuiltDocument, token_count: int) -> ClinicalDocument:
     digest = hashlib.sha256(built.text.encode()).hexdigest()
     existing = session.scalar(select(ClinicalDocument).where(ClinicalDocument.dataset_id == _dataset_id(session, built.patient_id), ClinicalDocument.patient_id == built.patient_id, ClinicalDocument.encounter_id == built.encounter_id, ClinicalDocument.document_type == built.document_type, ClinicalDocument.document_version == DOCUMENT_VERSION))
-    if existing is not None and existing.text_sha256 == digest and existing.source_resource_ids == built.source_resource_ids:
+    title_digest = hashlib.sha256(built.title.encode()).hexdigest()
+    if existing is not None and existing.text_sha256 == digest and existing.title_sha256 == title_digest and existing.source_resource_ids == built.source_resource_ids:
         return existing
     if existing is None:
-        existing = ClinicalDocument(id=str(uuid4()), dataset_id=_dataset_id(session, built.patient_id), patient_id=built.patient_id, encounter_id=built.encounter_id, document_type=built.document_type, document_version=DOCUMENT_VERSION, text=built.text, text_sha256=digest, token_count=token_count, source_resource_ids=built.source_resource_ids, source_resource_count=len(built.source_resource_ids), builder_version=BUILDER_VERSION)
+        existing = ClinicalDocument(id=str(uuid4()), dataset_id=_dataset_id(session, built.patient_id), patient_id=built.patient_id, encounter_id=built.encounter_id, document_type=built.document_type, document_version=DOCUMENT_VERSION, text=built.text, title=built.title, title_sha256=title_digest, body_sha256=digest, text_sha256=digest, token_count=token_count, source_resource_ids=built.source_resource_ids, source_resource_count=len(built.source_resource_ids), builder_version=BUILDER_VERSION)
         session.add(existing)
     else:
         session.execute(delete(ClinicalDocumentChunk).where(ClinicalDocumentChunk.document_id == existing.id))
-        existing.text, existing.text_sha256, existing.token_count = built.text, digest, token_count
+        existing.text, existing.title = built.text, built.title
+        existing.text_sha256, existing.body_sha256, existing.title_sha256, existing.token_count = digest, digest, title_digest, token_count
         existing.source_resource_ids, existing.source_resource_count = built.source_resource_ids, len(built.source_resource_ids)
     return existing
 

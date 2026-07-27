@@ -28,9 +28,9 @@ flowchart LR
     API --> Logs[Structured JSON logs]
 ```
 
-## Phase 2 retrieval architecture
+## Phase 2 and 2.5 retrieval architecture
 
-Normalized Phase 1 facts feed deterministic encounter documents, tokenizer-aware chunks, BioClinicalBERT mean-pooled and L2-normalized vectors, and exact pgvector search. Model loading is lazy, so health endpoints remain available when weights are unavailable. Documents, chunks, and search results retain source-resource lineage.
+Normalized Phase 1 facts feed deterministic encounter documents with title/body representations and tokenizer-aware chunks. Phase 2.5 provides provider isolation: MedCPT uses separate Query and Article encoders with CLS pooling, while BioClinicalBERT remains a mean-pooled comparison encoder. Both use L2-normalized vectors and exact pgvector search; PostgreSQL full-text search is the lexical baseline. Model loading is lazy, so health endpoints remain available when weights are unavailable. Documents, chunks, and search results retain source-resource lineage.
 
 ## Future target architecture
 
@@ -47,7 +47,9 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | PostgreSQL and pgvector foundation | Implemented |
 | Bounded Synthea ingestion | Implemented |
 | Dataset and patient timeline APIs | Implemented |
-| BioClinicalBERT retrieval | Implemented (bounded local development) |
+| MedCPT dual-encoder retrieval | Implemented (bounded local development) |
+| BioClinicalBERT comparison retrieval | Implemented (bounded local development) |
+| PostgreSQL full-text baseline | Implemented (bounded local development) |
 | LangGraph workflow | Planned |
 | Structured FHIR verification | Planned |
 | Human approval | Planned |

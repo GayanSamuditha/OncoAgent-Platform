@@ -15,9 +15,8 @@ from app.repositories.ingestion import (
     list_patients,
     patient_count,
 )
-from app.retrieval.embeddings import POOLING_METHOD
 from app.retrieval.model_registry import provider_for
-from app.retrieval.search import last_indexing, search
+from app.retrieval.search import last_indexing, postgres_fts_search, search
 from app.schemas.ingestion import (
     DatasetResponse,
     IngestionRunResponse,
@@ -48,20 +47,29 @@ router = APIRouter()
 def clinical_search(request: ClinicalSearchRequest, session: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> ClinicalSearchResponse:
     if any(item not in {"encounter", "patient-summary"} for item in request.document_types):
         raise HTTPException(status_code=422, detail="unsupported document type")
-    provider = provider_for(settings)
     try:
-        provider.load()
-        items, latency = search(session, provider, request.dataset_id, request.query, request.top_k, request.document_types, request.patient_id, request.minimum_score)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=f"clinical embedding model unavailable: {exc}") from exc
-    return ClinicalSearchResponse(query=request.query, dataset_id=request.dataset_id, result_count=len(items), model_name=provider.info.model_name, model_revision=provider.info.model_revision, search_latency_ms=latency, synthetic_data_notice="Synthetic Synthea data only.", score_notice="Similarity scores are not clinical probabilities.", items=[ClinicalSearchResult.model_validate(item) for item in items])
+        if request.retrieval_profile == "postgres_fts":
+            items, latency = postgres_fts_search(session, request.dataset_id, request.query, request.top_k, request.document_types, request.patient_id)
+            metadata = {"query_model_name": "none", "query_model_revision": "none", "document_model_name": "postgresql-fts", "document_model_revision": "database", "representation_strategy": "lexical clinical document text", "normalization_strategy": "none"}
+        else:
+            provider = provider_for(settings, request.retrieval_profile)
+            provider.load()  # type: ignore[attr-defined]
+            items, latency = search(session, provider, request.dataset_id, request.query, request.top_k, request.document_types, request.patient_id, request.minimum_score)
+            metadata = {"query_model_name": provider.metadata.query_model_name, "query_model_revision": provider.metadata.query_model_revision, "document_model_name": provider.metadata.document_model_name, "document_model_revision": provider.metadata.document_model_revision, "representation_strategy": provider.metadata.pooling_strategy, "normalization_strategy": provider.metadata.normalization_strategy}
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=503 if isinstance(exc, RuntimeError) else 422, detail=str(exc)) from exc
+    return ClinicalSearchResponse(query=request.query, dataset_id=request.dataset_id, result_count=len(items), model_name=metadata["document_model_name"], model_revision=metadata["document_model_revision"], search_latency_ms=latency, synthetic_data_notice="Synthetic Synthea data only.", score_notice="Retrieval scores are ranking signals, not clinical probabilities.", retrieval_profile=request.retrieval_profile, **metadata, items=[ClinicalSearchResult.model_validate(item) for item in items])
 
 
 @router.get("/api/v1/models/clinical-embedding", response_model=ModelStatusResponse)
 def clinical_embedding_status(settings: Settings = Depends(get_settings), session: Session = Depends(get_db)) -> ModelStatusResponse:
-    provider = provider_for(settings)
-    last = last_indexing(session, settings.clinical_embedding_model)
-    return ModelStatusResponse(configured_model=provider.info.model_name, loaded_status="loaded" if provider.model is not None else ("unavailable" if provider.error else "not_loaded"), device=provider.info.device, embedding_dimension=provider.info.dimension, maximum_sequence_length=settings.embedding_max_sequence_length, pooling_method=POOLING_METHOD, revision=provider.info.model_revision, last_successful_indexing_time=last.completed_at if last else None, current_limitations=["Encoder similarity is not clinical validation.", "Synthetic data only.", "Exact vector search is intended for the local development dataset."])
+    statuses: dict[str, object] = {"postgres_fts": {"configured": True, "loaded": True, "available": True, "device": "database", "limitations": ["Lexical baseline only."]}}
+    for profile in ("medcpt", "bioclinicalbert"):
+        provider = provider_for(settings, profile)
+        statuses[profile] = provider.health()
+    medcpt = provider_for(settings, "medcpt")
+    last = last_indexing(session, medcpt.metadata.document_model_name)
+    return ModelStatusResponse(providers=statuses, configured_model=medcpt.metadata.document_model_name, loaded_status="loaded" if medcpt.health()["loaded"] else "not_loaded", device=medcpt.metadata.device, embedding_dimension=medcpt.metadata.embedding_dimension, maximum_sequence_length=medcpt.metadata.document_max_length, pooling_method=medcpt.metadata.pooling_strategy, revision=medcpt.metadata.document_model_revision, last_successful_indexing_time=last.completed_at if last else None, current_limitations=["Synthetic data only.", "Retrieval is not clinical validation.", "MedCPT was trained for PubMed-like biomedical text and may not generalize to all synthetic FHIR phrasing."])
 
 
 @router.get("/api/v1/indexing-runs")

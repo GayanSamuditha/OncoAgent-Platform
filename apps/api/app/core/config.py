@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     embedding_token_overlap: int = Field(default=32, validation_alias="EMBEDDING_TOKEN_OVERLAP")
     embedding_batch_size_mps: int = Field(default=8, validation_alias="EMBEDDING_BATCH_SIZE_MPS")
     embedding_batch_size_cpu: int = Field(default=4, validation_alias="EMBEDDING_BATCH_SIZE_CPU")
+    retrieval_profile: str = Field(default="medcpt", validation_alias="RETRIEVAL_PROFILE")
+    medcpt_query_model: str = Field(default="ncbi/MedCPT-Query-Encoder", validation_alias="MEDCPT_QUERY_MODEL")
+    medcpt_document_model: str = Field(default="ncbi/MedCPT-Article-Encoder", validation_alias="MEDCPT_DOCUMENT_MODEL")
+    medcpt_query_revision: str = Field(default="main", validation_alias="MEDCPT_QUERY_REVISION")
+    medcpt_document_revision: str = Field(default="main", validation_alias="MEDCPT_DOCUMENT_REVISION")
+    retrieval_query_max_length: int = Field(default=64, validation_alias="RETRIEVAL_QUERY_MAX_LENGTH")
+    retrieval_document_max_length: int = Field(default=512, validation_alias="RETRIEVAL_DOCUMENT_MAX_LENGTH")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore"
