@@ -3,14 +3,16 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.db.session import get_db
+from app.db.session import SessionLocal, get_db
 from app.models.ingestion import FhirResource
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
+from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
 from app.repositories.ingestion import (
     get_dataset,
     get_ingestion_run,
@@ -44,8 +46,172 @@ from app.schemas.retrieval import (
 )
 from app.services.health import database_is_available
 from app.services.timeline import timeline
+from app.workflow.audit import existing_decision
+from app.workflow.schemas import (
+    ActorContext,
+    ApprovalDecisionRequest,
+    RunCreateRequest,
+    RunResponse,
+)
+from app.workflow.service import (
+    create_run,
+    get_approval_request,
+    get_run,
+    list_candidates,
+    list_events,
+    list_evidence,
+    resume_run,
+)
 
 router = APIRouter()
+
+
+def development_actor(x_actor_id: str | None = Header(default=None), x_actor_role: str | None = Header(default=None)) -> ActorContext:
+    if not x_actor_id or x_actor_role not in {"researcher", "reviewer", "admin"}:
+        raise HTTPException(status_code=401, detail="X-Actor-Id and X-Actor-Role are required development identity headers")
+    return ActorContext(actor_id=x_actor_id, role=x_actor_role)  # type: ignore[arg-type]
+
+
+def _run_response(run: WorkflowRun) -> RunResponse:
+    return RunResponse(run_id=run.id, thread_id=run.thread_id, status=run.status, current_node=run.current_node, created_at=run.created_at, dataset_id=run.dataset_id, actor_id=run.actor_id, actor_role=run.actor_role, approval_id=run.approval_id, structured_plan=run.structured_plan, final_result=run.final_result, warnings=run.warnings, errors=run.errors, links={"self": f"/api/v1/runs/{run.id}", "events": f"/api/v1/runs/{run.id}/events", "evidence": f"/api/v1/runs/{run.id}/evidence", "candidates": f"/api/v1/runs/{run.id}/candidates"})
+
+
+def _safe_model(item: Any) -> dict[str, Any]:
+    return {key: (value.isoformat() if hasattr(value, "isoformat") else value) for key, value in item.__dict__.items() if not key.startswith("_")}
+
+
+@router.post("/api/v1/runs", response_model=RunResponse, status_code=status.HTTP_201_CREATED)
+def create_workflow_run(request: RunCreateRequest, actor: ActorContext = Depends(development_actor), settings: Settings = Depends(get_settings)) -> RunResponse:
+    try:
+        return _run_response(create_run(request, actor, settings))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/runs")
+def list_workflow_runs(page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100), dataset_id: str | None = None, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        statement = select(WorkflowRun).order_by(WorkflowRun.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        if dataset_id:
+            statement = statement.where(WorkflowRun.dataset_id == dataset_id)
+        items = [_safe_model(item) for item in session.scalars(statement)]
+    return {"items": items, "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/runs/{run_id}/events")
+def workflow_events(run_id: str, page: int = Query(default=1, ge=1), page_size: int = Query(default=100, ge=1, le=200), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    if get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    items = list_events(run_id)
+    start = (page - 1) * page_size
+    return {"items": [_safe_model(item) for item in items[start:start + page_size]], "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/runs/{run_id}/evidence")
+def workflow_evidence(run_id: str, page: int = Query(default=1, ge=1), page_size: int = Query(default=100, ge=1, le=200), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    if get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    items = list_evidence(run_id)
+    start = (page - 1) * page_size
+    return {"items": [_safe_model(item) for item in items[start:start + page_size]], "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/runs/{run_id}/candidates")
+def workflow_candidates(run_id: str, page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    if get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    items = list_candidates(run_id)
+    start = (page - 1) * page_size
+    return {"items": [_safe_model(item) for item in items[start:start + page_size]], "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/runs/{run_id}/stream")
+def workflow_stream(run_id: str, _: ActorContext = Depends(development_actor)) -> StreamingResponse:
+    if get_run(run_id) is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    def stream() -> Any:
+        for item in list_events(run_id):
+            yield f"event: {item.event_type}\ndata: {json.dumps(_safe_model(item), default=str)}\n\n"
+    return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@router.get("/api/v1/runs/{run_id}", response_model=RunResponse)
+def workflow_run(run_id: str, _: ActorContext = Depends(development_actor)) -> RunResponse:
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    return _run_response(run)
+
+
+@router.post("/api/v1/runs/{run_id}/cancel", response_model=RunResponse)
+def cancel_workflow_run(run_id: str, actor: ActorContext = Depends(development_actor), settings: Settings = Depends(get_settings)) -> RunResponse:
+    run = get_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    if run.status in {"completed", "rejected", "cancelled", "failed", "needs_clarification"}:
+        raise HTTPException(status_code=409, detail="terminal workflow runs cannot be cancelled")
+    if actor.role == "researcher" and actor.actor_id != run.actor_id:
+        raise HTTPException(status_code=403, detail="researchers may cancel only their own runs")
+    if not run.approval_id:
+        raise HTTPException(status_code=409, detail="run is not at a cancellable checkpoint")
+    try:
+        return _run_response(resume_run(run, {"decision": "cancel", "actor_id": actor.actor_id, "actor_role": actor.role, "comment": "Cancelled by actor."}, settings))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/approvals")
+def approvals(page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        items = list(session.scalars(select(ApprovalRequest).order_by(ApprovalRequest.created_at.desc()).offset((page - 1) * page_size).limit(page_size)))
+    return {"items": [_safe_model(item) for item in items], "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/approvals/{approval_id}")
+def approval(approval_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    item = get_approval_request(approval_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="approval request not found")
+    return _safe_model(item)
+
+
+@router.post("/api/v1/approvals/{approval_id}/decision", response_model=RunResponse)
+def approval_decision(approval_id: str, request: ApprovalDecisionRequest, actor: ActorContext = Depends(development_actor), settings: Settings = Depends(get_settings)) -> RunResponse:
+    approval_item = get_approval_request(approval_id)
+    if approval_item is None:
+        raise HTTPException(status_code=404, detail="approval request not found")
+    run = get_run(approval_item.run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    if run.status in {"completed", "rejected", "cancelled", "failed", "needs_clarification"}:
+        raise HTTPException(status_code=409, detail="workflow run is terminal")
+    if existing_decision(approval_id) is not None:
+        raise HTTPException(status_code=409, detail="approval already has a decision")
+    if request.decision in {"approve", "reject", "request_changes"} and actor.role not in {"reviewer", "admin"}:
+        raise HTTPException(status_code=403, detail="only reviewers or admins may decide approval")
+    if request.decision == "approve" and actor.actor_id == run.actor_id:
+        raise HTTPException(status_code=403, detail="researcher and reviewer must be different actors")
+    try:
+        return _run_response(resume_run(run, {"decision": request.decision, "actor_id": actor.actor_id, "actor_role": actor.role, "comment": request.comment}, settings))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/api/v1/audit-events")
+def audit_events(page: int = Query(default=1, ge=1), page_size: int = Query(default=50, ge=1, le=200), run_id: str | None = None, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        statement = select(WorkflowEvent).order_by(WorkflowEvent.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        if run_id:
+            statement = statement.where(WorkflowEvent.run_id == run_id)
+        items = [_safe_model(item) for item in session.scalars(statement)]
+    return {"items": items, "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/workflow-policy")
+def workflow_policy(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    return {"agent_execution_enabled": settings.agent_execution_enabled, "max_candidates": settings.workflow_max_candidates, "approval_required": True, "allowed_roles": ["researcher", "reviewer", "admin"], "retrieval_policy": {"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"}, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
 
 
 def _evaluation_output() -> dict[str, Any]:
@@ -208,11 +374,11 @@ def platform_info(settings: Settings = Depends(get_settings)) -> PlatformInfoRes
         data_policy="Synthetic Synthea data only.",
         clinical_validation_status="Not clinically validated.",
         capabilities=CapabilitySet(
-            implemented=["Platform health and readiness reporting", "Foundation metadata API"],
+            implemented=["Platform health and readiness reporting", "Foundation metadata API", "Bounded clinical retrieval", "Governed LangGraph cohort workflow with human approval"],
             planned=[
                 "Bounded Synthea ingestion",
                 "BioClinicalBERT retrieval",
-                "LangGraph governed workflows",
+                "LLM-backed planning provider",
                 "Human approval workflows",
                 "MCP and CrewAI interoperability",
                 "Temporal and Ray execution",

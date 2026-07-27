@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 through Phase 2.6 are implemented in bounded local form: deterministic clinical documents, tokenizer-aware chunks, model-agnostic retrieval providers, MedCPT dual-encoder support, BioClinicalBERT comparison support, PostgreSQL full-text baseline, exact pgvector search, hybrid Reciprocal Rank Fusion, optional bounded MedCPT cross-encoder reranking, provenance APIs, and a retrieval evaluation dashboard. These models are encoders/rankers, not generative models or clinical decision-makers, and are not clinically validated. LangGraph workflows, cohort search, and approval workflows are not implemented.
+Phase 1 through Phase 3A are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, and a persistent LangGraph cohort workflow with structured FHIR verification, audit records, and reviewer approval interruption. These models are encoders/rankers, not generative models or clinical decision-makers, and are not clinically validated. LLM-backed planning, cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
 
 Phase 2 smoke test:
 
@@ -29,6 +29,21 @@ apps/api/.venv/bin/python scripts/evaluate_clinical_retrieval.py \
 Machine-readable results are written to ignored `evaluation_outputs/`; the `/evaluations` page displays only measured results. The current bounded policy recommends MedCPT as the dense default, BioClinicalBERT as dense fallback, and no reranker by default. Hybrid and reranked profiles did not justify their added latency. The earlier 25-patient smoke set favored BioClinicalBERT, so this remains a development recommendation rather than a production selection. All findings are synthetic development evaluation only, not production performance.
 
 Only synthetic Synthea data is supported. Raw archives are local inputs and are ignored by Git.
+
+## Phase 3A governed workflow
+
+Phase 3A accepts a bounded cohort request, creates a deterministic allowlisted plan, retrieves candidates using MedCPT → BioClinicalBERT → PostgreSQL FTS fallback, verifies criteria against normalized structured FHIR facts, and pauses before finalization. Reviewer decisions resume the same PostgreSQL-backed LangGraph thread. Development identity is supplied explicitly with `X-Actor-Id` and `X-Actor-Role`; this is not production authentication.
+
+Example:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/runs \
+  -H 'content-type: application/json' \
+  -H 'X-Actor-Id: researcher-1' -H 'X-Actor-Role: researcher' \
+  -d '{"dataset_id":"<synthea-eval-100-id>","request":"Find synthetic adults with hypertension and elevated blood pressure.","criteria":[{"criterion_id":"age","criterion_type":"minimum_age","value":18},{"criterion_id":"condition","criterion_type":"condition","clinical_concept":"hypertension"},{"criterion_id":"observation","criterion_type":"observation","clinical_concept":"elevated blood pressure"}],"max_candidates":20}'
+```
+
+Inspect the returned run, events, candidates, and evidence. Approve only as a different reviewer/admin actor. Set `AGENT_EXECUTION_ENABLED=false` to prevent new graph execution and tool calls; inspection endpoints remain available. Every finalization requires approval, and retrieval similarity is candidate-generation evidence only.
 
 ## Architecture
 

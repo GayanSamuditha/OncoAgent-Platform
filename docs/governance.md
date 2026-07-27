@@ -19,3 +19,7 @@ Dependencies require a present implementation need. Deferred agent, orchestratio
 ## Retrieval evaluation
 
 Hybrid fusion and cross-encoder reranking are evaluated on the same bounded dataset and structured-ground-truth cases. RRF constants, candidate-pool sizes, model revisions, latency, negative results, and failure analysis are recorded. Similarity and reranker logits are ranking signals, not clinical probabilities. Profile selection is policy-controlled and must consider quality, latency, memory, complexity, and failure characteristics.
+
+## Phase 3A workflow governance
+
+Workflow state is checkpointed in PostgreSQL by LangGraph and mirrored into application events, steps, tool calls, policy decisions, evidence, approval, and lineage tables. Only registered read-only tools may execute. Plans are Pydantic-validated and dataset-scoped. Inclusion requires every required criterion to be verified from normalized structured FHIR facts with provenance. Approval records are idempotent and finalization is terminal-state protected. The kill switch and cancellation path stop execution safely.

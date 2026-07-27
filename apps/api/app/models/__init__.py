@@ -19,6 +19,18 @@ from app.models.retrieval import (
     ClinicalEmbedding,
     IndexingRun,
 )
+from app.models.workflow import (
+    ApprovalDecision,
+    ApprovalRequest,
+    PolicyDecision,
+    WorkflowCandidate,
+    WorkflowEvent,
+    WorkflowEvidence,
+    WorkflowLineage,
+    WorkflowRun,
+    WorkflowStep,
+    WorkflowToolCall,
+)
 
 __all__ = [
     "Condition",
@@ -36,4 +48,14 @@ __all__ = [
     "ClinicalDocumentChunk",
     "ClinicalEmbedding",
     "IndexingRun",
+    "WorkflowRun",
+    "WorkflowStep",
+    "WorkflowEvent",
+    "WorkflowToolCall",
+    "WorkflowCandidate",
+    "WorkflowEvidence",
+    "ApprovalRequest",
+    "ApprovalDecision",
+    "PolicyDecision",
+    "WorkflowLineage",
 ]

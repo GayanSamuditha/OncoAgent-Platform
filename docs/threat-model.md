@@ -13,5 +13,9 @@
 | Hybrid/reranker overconfidence | Scores exposed as ranking signals with separate lineage | Structured FHIR verification before any future cohort decision |
 | Candidate-pool resource exhaustion | Maximum 50 candidates and bounded reranker batches | Operational quotas and workload isolation |
 | Cross-dataset leakage | Dataset filters applied to lexical and vector branches | Authorization-scoped dataset access |
+| Unapproved cohort finalization | LangGraph interrupt, reviewer/admin decision, terminal-state protection | External approval service and segregation-of-duties controls |
+| Tool misuse or arbitrary execution | Pydantic allowlisted registry, read-only tools, bounded arguments and retries | Signed tool manifests and authorization service |
+| Checkpoint/audit divergence | Separate PostgreSQL checkpoint and application audit writes with run/thread correlation | Reconciliation jobs and immutable audit storage |
+| Development identity misuse | Explicit actor headers documented as simulation only | Production authentication, authorization, and identity federation |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.
