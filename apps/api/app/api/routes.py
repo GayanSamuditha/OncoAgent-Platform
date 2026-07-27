@@ -47,7 +47,12 @@ from app.schemas.retrieval import (
 from app.services.health import database_is_available
 from app.services.timeline import timeline
 from app.workflow.audit import existing_decision
-from app.workflow.planner import PLANNING_SYSTEM_PROMPT, OllamaQwenPlannerProvider
+from app.workflow.planner import (
+    PLANNING_SYSTEM_PROMPT,
+    OllamaQwenPlannerProvider,
+    allowed_local_planner_models,
+)
+from app.workflow.policy_selection import select_policy
 from app.workflow.schemas import (
     ActorContext,
     ApprovalDecisionRequest,
@@ -225,14 +230,21 @@ def local_runtime_status(settings: Settings = Depends(get_settings)) -> dict[str
 
 @router.get("/api/v1/models/planners")
 def planner_statuses(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
-    qwen = OllamaQwenPlannerProvider(settings).health()
-    return {"providers": {"qwen_local": qwen, "deterministic": {"provider_id": "deterministic", "runtime": "python", "configured": True, "available": True, "healthy": True, "supports_structured_output": True, "limitations": ["Bounded vocabulary; unsupported requests require clarification."]}}, "active_provider": settings.planner_default_provider, "fallback_provider": settings.planner_fallback_provider, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
+    providers: dict[str, Any] = {"deterministic": {"provider_id": "deterministic", "runtime": "python", "configured": True, "available": True, "healthy": True, "supports_structured_output": True, "limitations": ["Bounded vocabulary; unsupported requests require clarification."]}}
+    for model in allowed_local_planner_models(settings):
+        try:
+            providers[model] = OllamaQwenPlannerProvider(settings, model_name=model).health()
+        except ValueError as exc:
+            providers[model] = {"provider_id": "qwen_local", "configured": False, "available": False, "healthy": False, "error": str(exc)}
+    return {"providers": providers, "allowed_models": list(allowed_local_planner_models(settings)), "active_provider": settings.planner_default_provider, "configured_default_model": settings.local_planner_default_model, "fallback_provider": settings.planner_fallback_provider, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
 
 
 @router.get("/api/v1/models/planners/{provider_id}")
 def planner_status(provider_id: str, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     if provider_id == "qwen_local":
         return OllamaQwenPlannerProvider(settings).health()
+    if provider_id in allowed_local_planner_models(settings):
+        return OllamaQwenPlannerProvider(settings, model_name=provider_id).health()
     if provider_id == "deterministic":
         return {"provider_id": "deterministic", "runtime": "python", "configured": True, "available": True, "healthy": True, "supports_structured_output": True}
     raise HTTPException(status_code=404, detail="planner provider not found")
@@ -267,6 +279,8 @@ def evaluations() -> dict[str, object]:
 
 @router.get("/api/v1/evaluations/{evaluation_id}")
 def evaluation(evaluation_id: str) -> dict[str, object]:
+    if evaluation_id == "local-planners":
+        return _local_planner_evaluation()
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
         raise HTTPException(status_code=404, detail="evaluation not found")
     return _evaluation_output()
@@ -296,6 +310,38 @@ def retrieval_policy() -> dict[str, object]:
     path = Path(__file__).resolve().parents[4] / "evaluations/retrieval/retrieval_policy.json"
     loaded = json.loads(path.read_text(encoding="utf-8"))
     return loaded if isinstance(loaded, dict) else {}
+
+
+def _local_planner_evaluation() -> dict[str, Any]:
+    root = Path(__file__).resolve().parents[4]
+    path = root / "evaluation_outputs/phase3c_local_planner_comparison.json"
+    if not path.exists():
+        return {"status": "not_available", "models": {}, "synthetic_development_evaluation": True, "not_clinically_validated": True}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid", "models": {}}
+
+
+@router.get("/api/v1/planner-policy")
+def planner_policy(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    output = _local_planner_evaluation()
+    policy = output.get("policy")
+    if not isinstance(policy, dict):
+        policy = select_policy({}, baseline=settings.local_planner_default_model)
+        policy["status"] = "pending_phase3c_runtime_evaluation"
+    return {"policy": policy, "evaluated_models": output.get("models", {}), "allowed_models": list(allowed_local_planner_models(settings)), "synthetic_development_evaluation": True, "not_clinically_validated": True, "not_production_performance": True}
+
+
+@router.get("/api/v1/evaluations/local-planners")
+def local_planner_evaluations() -> dict[str, Any]:
+    return _local_planner_evaluation()
+
+
+@router.get("/api/v1/evaluations/local-planners/{evaluation_id}")
+def local_planner_evaluation(evaluation_id: str) -> dict[str, Any]:
+    output = _local_planner_evaluation()
+    if evaluation_id != output.get("evaluation_id", "phase3c-local-planners") or output.get("status") == "not_available":
+        raise HTTPException(status_code=404, detail="local planner evaluation not found")
+    return output
 
 
 @router.post("/api/v1/clinical-search", response_model=ClinicalSearchResponse)

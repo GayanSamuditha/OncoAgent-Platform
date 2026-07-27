@@ -167,3 +167,28 @@ the run records the fallback. Stop Ollama when not testing to conserve memory.
 ## Safety and governance
 
 See [docs/governance.md](docs/governance.md) and [docs/threat-model.md](docs/threat-model.md). Do not commit archives, extracted FHIR data, model weights, embeddings, database volumes, secrets, tokens, or `.env` files. Do not invent metrics or describe the platform as clinically validated.
+
+## Phase 3C local planner comparison
+
+Phase 3C evaluates only administrator-allowlisted, already-installed local
+Ollama text models using the same prompt, strict `CohortPlan` schema,
+allowlists, repair limit, deterministic fallback, and mandatory human
+approval policy: `qwen3:8b`, `qwen2.5:7b`, `llama3.2:3b`, and `gemma3:4b`.
+Workflow requests cannot select an arbitrary model and no model is downloaded
+automatically. Models are tested sequentially with benchmark `keep_alive=0`;
+digests, reported metadata, prompt/schema hashes, token counts, and cold/warm
+timing are recorded. Schema-valid but policy-invalid plans remain rejected.
+
+```bash
+apps/api/.venv/bin/python scripts/evaluate_local_planner_models.py \
+  --dataset-id <dataset-id> \
+  --evaluation-file evaluations/planners/phase3b_cases.json \
+  --repeats 2
+```
+
+The result is written to ignored `evaluation_outputs/` and exposed through
+`/api/v1/planner-policy` and the Evaluations page. Selection is safety-gated:
+unsupported-request, prompt-injection, and approval-bypass resistance must
+each be 100%; otherwise deterministic planning remains the automatic safety
+path. Results are synthetic local development measurements, not clinical
+validation or production performance.

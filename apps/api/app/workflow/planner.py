@@ -92,9 +92,13 @@ class OllamaQwenPlannerProvider:
     provider_id = "qwen_local"
     runtime = "ollama"
 
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, model_name: str | None = None, benchmark: bool = False) -> None:
         self.settings = settings
-        self.model_name = settings.local_llm_model
+        requested_model = model_name or settings.local_planner_default_model or settings.local_llm_model
+        if requested_model not in allowed_local_planner_models(settings):
+            raise ValueError(f"local planner model is not allowlisted: {requested_model}")
+        self.model_name = requested_model
+        self.keep_alive = settings.local_planner_benchmark_keep_alive if benchmark else settings.local_llm_keep_alive
         self.base_url = _validate_local_url(settings.local_llm_base_url)
         self._last_success: str | None = None
         self._last_failure: str | None = None
@@ -104,7 +108,7 @@ class OllamaQwenPlannerProvider:
         return {"provider_id": self.provider_id, "runtime": self.runtime, "configured_model": self.model_name, "prompt_id": PROMPT_ID, "prompt_version": PROMPT_VERSION, "prompt_content_hash": _prompt_hash(), "cohort_plan_schema_hash": _schema_hash(), "supports_structured_output": True, "supports_thinking_control": True, **self._metadata}
 
     def health(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {**self.metadata(), "installed": False, "available": False, "healthy": False, "loaded": None, "last_successful_request": self._last_success, "last_failure_category": self._last_failure, "limitations": ["Local Ollama service only; no hosted fallback."]}
+        payload: dict[str, Any] = {**self.metadata(), "configured": True, "installed": False, "available": False, "healthy": False, "loaded": None, "last_successful_request": self._last_success, "last_failure_category": self._last_failure, "limitations": ["Local Ollama service only; no hosted fallback."]}
         if not self.settings.local_llm_enabled:
             payload["last_failure_category"] = "disabled"
             return payload
@@ -113,7 +117,8 @@ class OllamaQwenPlannerProvider:
             response.raise_for_status()
             models = response.json().get("models", [])
             match = next((item for item in models if item.get("name") == self.model_name), None)
-            payload.update({"available": True, "healthy": True, "installed": match is not None, "resolved_model_digest": (match or {}).get("digest"), "model_size": (match or {}).get("size"), "last_modified": (match or {}).get("modified_at")})
+            details = (match or {}).get("details") or {}
+            payload.update({"available": True, "healthy": True, "installed": match is not None, "resolved_model_digest": (match or {}).get("digest"), "model_size": (match or {}).get("size"), "last_modified": (match or {}).get("modified_at"), "model_family": details.get("family"), "parameter_size": details.get("parameter_size"), "quantization": details.get("quantization_level"), "format": details.get("format"), "context_length": settings_context(self.settings)})
         except Exception:
             payload["last_failure_category"] = "ollama_unavailable"
             self._last_failure = "ollama_unavailable"
@@ -121,7 +126,7 @@ class OllamaQwenPlannerProvider:
 
     def _chat(self, messages: list[dict[str, str]], repair: bool = False) -> tuple[dict[str, Any], str]:
         schema = CohortPlan.model_json_schema()
-        body: dict[str, Any] = {"model": self.model_name, "messages": messages, "stream": False, "format": schema, "options": {"temperature": self.settings.local_llm_temperature, "num_ctx": self.settings.local_llm_context_length, "num_predict": self.settings.local_llm_max_output_tokens}, "keep_alive": self.settings.local_llm_keep_alive}
+        body: dict[str, Any] = {"model": self.model_name, "messages": messages, "stream": False, "format": schema, "options": {"temperature": self.settings.local_llm_temperature, "num_ctx": self.settings.local_planner_context_length, "num_predict": self.settings.local_planner_max_output_tokens}, "keep_alive": self.keep_alive}
         if not repair:
             body["think"] = self.settings.local_llm_thinking
         modes = ["think_false" if not repair else "repair"]
@@ -267,3 +272,15 @@ class DeterministicFakePlanner(DeterministicCohortPlanner):
 
 def plan_to_dict(plan: CohortPlan) -> dict[str, Any]:
     return plan.model_dump(mode="json")
+
+
+def settings_context(settings: Settings) -> int:
+    return settings.local_planner_context_length
+
+
+def allowed_local_planner_models(settings: Settings) -> tuple[str, ...]:
+    return tuple(item.strip() for item in settings.local_planner_models.split(",") if item.strip())
+
+
+def build_local_planner_provider(settings: Settings, model_name: str | None = None, benchmark: bool = False) -> OllamaQwenPlannerProvider:
+    return OllamaQwenPlannerProvider(settings, model_name=model_name, benchmark=benchmark)

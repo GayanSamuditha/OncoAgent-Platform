@@ -51,6 +51,14 @@ class Settings(BaseSettings):
     local_llm_max_response_bytes: int = Field(default=1048576, ge=1024, le=10485760, validation_alias="LOCAL_LLM_MAX_RESPONSE_BYTES")
     planner_default_provider: str = Field(default="qwen_local", validation_alias="PLANNER_DEFAULT_PROVIDER")
     planner_fallback_provider: str = Field(default="deterministic", validation_alias="PLANNER_FALLBACK_PROVIDER")
+    local_planner_models: str = Field(
+        default="qwen3:8b,qwen2.5:7b,llama3.2:3b,gemma3:4b",
+        validation_alias="LOCAL_PLANNER_MODELS",
+    )
+    local_planner_default_model: str = Field(default="qwen3:8b", validation_alias="LOCAL_PLANNER_DEFAULT_MODEL")
+    local_planner_benchmark_keep_alive: str = Field(default="0", validation_alias="LOCAL_PLANNER_BENCHMARK_KEEP_ALIVE")
+    local_planner_context_length: int = Field(default=8192, ge=256, le=32768, validation_alias="LOCAL_PLANNER_CONTEXT_LENGTH")
+    local_planner_max_output_tokens: int = Field(default=1024, ge=64, le=4096, validation_alias="LOCAL_PLANNER_MAX_OUTPUT_TOKENS")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore", populate_by_name=True
