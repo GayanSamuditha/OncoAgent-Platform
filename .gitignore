@@ -247,9 +247,13 @@ ollama_models/
 embeddings/
 evaluation_outputs/
 workflow_outputs/
+mcp_outputs/
 .langgraph/
 .cache/
 huggingface_cache/
 transformers_cache/
 torch_cache/
 *.tsbuildinfo
+apps/crewai_client/.crewai/
+crewai_outputs/
+evaluations/crewai/outputs/

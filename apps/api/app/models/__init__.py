@@ -1,5 +1,14 @@
 """SQLAlchemy models."""
 
+from app.models.crewai import (
+    CrewAgent,
+    CrewEvent,
+    CrewLineage,
+    CrewOutput,
+    CrewReview,
+    CrewRun,
+    CrewTask,
+)
 from app.models.ingestion import (
     Condition,
     Dataset,
@@ -13,6 +22,7 @@ from app.models.ingestion import (
     Patient,
     Procedure,
 )
+from app.models.mcp import MCPRequest
 from app.models.retrieval import (
     ClinicalDocument,
     ClinicalDocumentChunk,
@@ -58,4 +68,12 @@ __all__ = [
     "ApprovalDecision",
     "PolicyDecision",
     "WorkflowLineage",
+    "MCPRequest",
+    "CrewRun",
+    "CrewAgent",
+    "CrewTask",
+    "CrewEvent",
+    "CrewOutput",
+    "CrewReview",
+    "CrewLineage",
 ]

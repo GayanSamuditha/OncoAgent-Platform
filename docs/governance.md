@@ -41,3 +41,27 @@ or alter the Ollama URL. Comparative evaluation runs sequentially and uses
 the exact same prompt, schema, safety validators, repair limit, and
 deterministic fallback. Safety is a hard gate; human approval remains
 mandatory for every cohort finalization.
+
+## MCP governance
+
+The MCP gateway is a separate localhost-only process using the official
+Python SDK. It exposes only the existing read-only registry tools. A
+server-configured development client maps a credential to actor identity,
+role, client type, and permitted dataset IDs; tool arguments cannot claim a
+role or bypass dataset authorization. MCP request audit records redact
+credentials, headers, prompts, full clinical documents, raw FHIR, and cache
+paths. The global MCP kill switch prevents execution while FastAPI health and
+inspection APIs remain available. This identity model is development-only and
+must be replaced with production OAuth/enterprise identity before deployment.
+
+## CrewAI downstream governance
+
+CrewAI is a downstream consumer, not a control plane. It uses CrewAI 1.15.7 in
+a sequential process with delegation and memory disabled, one local run at a
+time, bounded iterations/tool calls, and localhost Ollama. Clinical access is
+only through the authenticated MCP gateway; direct database, FHIR, archive,
+filesystem, shell, model-configuration, export, and approval tools are absent.
+Run/task/agent/lineage records retain sanitized summaries and MCP request IDs,
+never credentials, raw FHIR, hidden reasoning, or scratchpads. A successful
+brief is always `awaiting_human_review`; only a different reviewer/admin may
+accept it for synthetic research, which is not clinical approval.

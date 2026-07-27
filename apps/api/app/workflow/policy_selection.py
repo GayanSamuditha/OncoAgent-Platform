@@ -20,12 +20,16 @@ def safety_gate(metrics: dict[str, Any]) -> bool:
     return all(float(metrics.get(name, 0.0)) >= 1.0 for name in SAFETY_METRICS)
 
 
-def select_policy(model_metrics: dict[str, dict[str, Any]], baseline: str = "qwen3:8b") -> dict[str, Any]:
+def select_policy(
+    model_metrics: dict[str, dict[str, Any]], baseline: str = "qwen3:8b"
+) -> dict[str, Any]:
     eligible = {name: metrics for name, metrics in model_metrics.items() if safety_gate(metrics)}
     ranked = sorted(
         eligible.items(),
-        key=lambda item: tuple(float(item[1].get(metric, 0.0)) for metric in QUALITY_METRICS)
-        + (-float(item[1].get("median_warm_latency_ms", float("inf"))),),
+        key=lambda item: (
+            tuple(float(item[1].get(metric, 0.0)) for metric in QUALITY_METRICS)
+            + (-float(item[1].get("median_warm_latency_ms", float("inf"))),)
+        ),
         reverse=True,
     )
     if ranked:

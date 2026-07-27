@@ -18,7 +18,9 @@ class TextChunk:
     token_count: int
 
 
-def chunk_text(text: str, tokenizer: Tokenizer, max_length: int = 256, overlap: int = 32) -> list[TextChunk]:
+def chunk_text(
+    text: str, tokenizer: Tokenizer, max_length: int = 256, overlap: int = 32
+) -> list[TextChunk]:
     if max_length < 8 or overlap < 0 or overlap >= max_length:
         raise ValueError("max_length must be >= 8 and overlap must be smaller than max_length")
     ids = tokenizer.encode(text, add_special_tokens=False)
@@ -29,7 +31,9 @@ def chunk_text(text: str, tokenizer: Tokenizer, max_length: int = 256, overlap: 
     start = 0
     while start < len(ids):
         end = min(start + window, len(ids))
-        decoded = tokenizer.decode(ids[start:end], skip_special_tokens=True, clean_up_tokenization_spaces=True).strip()
+        decoded = tokenizer.decode(
+            ids[start:end], skip_special_tokens=True, clean_up_tokenization_spaces=True
+        ).strip()
         chunks.append(TextChunk(len(chunks), decoded, start, end, end - start))
         if end == len(ids):
             break

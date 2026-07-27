@@ -43,3 +43,23 @@ structured planner lineage, never hidden reasoning.
 The local console routes are `/workflow`, `/approvals`, `/audit`, and
 `/agent-catalog`. All displays are synthetic development views and not
 clinical validation.
+
+## Phase 4A MCP inspection contracts
+
+- `GET /api/v1/mcp/status` reports enabled transports and the read-only tool catalog.
+- `GET /api/v1/mcp/clients` reports sanitized development client identities and dataset scopes; tokens are never returned.
+- `GET /api/v1/mcp/tools` reports stable tool names and versions.
+- `GET /api/v1/mcp/requests` and `/mcp/requests/{request_id}` report bounded MCP audit lineage.
+
+The MCP Streamable HTTP endpoint is `/mcp` on the separately started
+localhost gateway. Stdio uses `MCP_STDIO_CLIENT_ID` and `MCP_STDIO_TOKEN` for
+local integration. Tool arguments use a strict `request` object matching the
+registered Pydantic input contract. Results include typed safe error objects,
+synthetic-data notices, and no raw FHIR payloads.
+
+## Phase 4B CrewAI contracts
+
+- `GET /api/v1/crews`, `/crews/oncology-research`, and `/crews/oncology-research/status` expose downstream-client configuration without credentials.
+- `POST /api/v1/crews/oncology-research/runs` accepts a strict dataset-scoped request and returns `202`; it does not accept MCP URLs/tokens, arbitrary models/tools, SQL, paths, or approval decisions.
+- Run inspection is available at `/crews/oncology-research/runs/{run_id}`, `/events`, `/tasks`, and `/output`; output excludes scratchpads and raw FHIR.
+- `POST /crews/oncology-research/runs/{run_id}/review` accepts only the documented synthetic-research review decisions. Only reviewer/admin roles may decide, and the initiating researcher cannot accept their own run. Duplicate decisions return `409`.

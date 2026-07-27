@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 through Phase 3B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, and optional local Qwen planning through Ollama. Qwen is never loaded in FastAPI and has a strict Pydantic JSON-schema boundary with deterministic fallback. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
+Phase 1 through Phase 4B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, optional local planner selection through Ollama, a separate governed MCP tool gateway, and CrewAI as a downstream MCP-only oncology research client. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
 
 Phase 2 smoke test:
 
@@ -192,3 +192,65 @@ unsupported-request, prompt-injection, and approval-bypass resistance must
 each be 100%; otherwise deterministic planning remains the automatic safety
 path. Results are synthetic local development measurements, not clinical
 validation or production performance.
+
+## Phase 4A governed MCP gateway
+
+Phase 4A adds a separate official Python MCP SDK gateway. It supports
+Streamable HTTP at `http://127.0.0.1:8010/mcp` and stdio for local clients.
+Only the ten existing read-only `phase3a-tool-v1` tools are exposed. MCP
+delegates to the existing registry and domain services; it does not expose
+SQL, raw FHIR, filesystem access, model selection, approval, export, or audit
+mutation.
+
+Configure development-only clients in ignored `.env` using `MCP_DEV_CLIENTS`
+as a JSON array containing client ID, token, actor role, client type, and
+dataset IDs. This is not production OAuth. Start the gateway with:
+
+```bash
+make mcp-dev
+# or for local MCP client integration:
+make mcp-stdio
+```
+
+MCP requests require a configured client credential, enforce dataset
+allowlists, synthetic-dataset checks, retrieval-profile allowlists, result
+limits, response-size limits, and safe typed error categories. Each request
+records sanitized arguments, client/actor identity, correlation ID, tool
+version, latency, result size, and retrieval fallback lineage in
+`mcp_requests`. MCP records are included in Audit Explorer. The gateway is
+localhost-only by default and obeys `MCP_ENABLED`.
+
+## Phase 4B CrewAI downstream client
+
+`apps/crewai_client` is a separate open-source CrewAI 1.15.7 application. It
+uses local Ollama (`llama3.2:3b` by default, `qwen3:8b` as the configured
+secondary) and a sequential four-agent crew. Clinical access is exclusively
+through the official MCP Streamable HTTP client; agents receive no database,
+FHIR repository, FastAPI, archive, or Ollama configuration handles. The
+assigned MCP tools are role-scoped and read-only, memory and delegation are
+disabled, model and dataset selection are server-controlled, and all output
+stops at `awaiting_human_review`.
+
+Install the isolated client into the local Python environment with
+`python3.12 -m pip install -e apps/crewai_client`. Configure the ignored
+`CREWAI_MCP_CLIENT_ID`, `CREWAI_MCP_TOKEN`, and
+`CREWAI_MCP_DATASET_IDS` values in `.env`, then run the MCP gateway and API.
+The downstream console is `/crewai`; run records are available under
+`/api/v1/crews/oncology-research/runs`. Local background execution is bounded
+to one process-isolated run and is not durable across process failure; the
+LangGraph workflow remains the governed control plane. A process restart marks
+in-flight CrewAI runs failed with `process_interrupted` and never resumes a
+partial model call.
+
+Run the source-controlled 17-case synthetic evaluation sequentially with:
+
+```bash
+python scripts/evaluate_crewai.py --base-url http://127.0.0.1:8000 \
+  --model llama3.2:3b --evaluation-file evaluations/crewai/phase4b_cases.json \
+  --output evaluation_outputs/crewai/phase4b_llama.json
+```
+
+The measured summary is maintained in
+[`evaluations/crewai/phase4b_evaluation_summary.md`](evaluations/crewai/phase4b_evaluation_summary.md).
+Generated outputs are ignored and must not be presented as clinical or
+production performance.

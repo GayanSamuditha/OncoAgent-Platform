@@ -2,11 +2,12 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: install backend-dev frontend-dev db-up db-down migrate test lint typecheck check
+.PHONY: install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install db-up db-down migrate test lint typecheck check
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
 	$(API_DIR)/.venv/bin/pip install -e '$(API_DIR)[dev]'
+	$(API_DIR)/.venv/bin/pip install -e apps/crewai_client
 	cd $(WEB_DIR) && npm install
 
 backend-dev:
@@ -14,6 +15,15 @@ backend-dev:
 
 frontend-dev:
 	cd $(WEB_DIR) && npm run dev
+
+mcp-dev:
+	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python -m apps.mcp_server.server --transport streamable-http
+
+mcp-stdio:
+	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python -m apps.mcp_server.server --transport stdio
+
+crewai-install:
+	$(API_DIR)/.venv/bin/pip install -e apps/crewai_client
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d

@@ -10,7 +10,10 @@ class ClinicalSearchRequest(BaseModel):
     document_types: list[str] = Field(default_factory=lambda: ["encounter"])
     patient_id: str | None = None
     minimum_score: float | None = Field(default=None, ge=-1, le=1)
-    retrieval_profile: str = Field(default="bioclinicalbert", pattern="^(medcpt|bioclinicalbert|postgres_fts|hybrid_bioclinicalbert|hybrid_medcpt)$")
+    retrieval_profile: str = Field(
+        default="bioclinicalbert",
+        pattern="^(medcpt|bioclinicalbert|postgres_fts|hybrid_bioclinicalbert|hybrid_medcpt)$",
+    )
     reranker: str = Field(default="none", pattern="^(none|medcpt_cross_encoder)$")
     candidate_pool_size: int = Field(default=20, ge=1, le=50)
 

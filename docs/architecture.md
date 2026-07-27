@@ -52,7 +52,7 @@ FastAPI in-process model and never a browser-facing endpoint.
 
 The planned vertical slice adds a bounded Synthea importer, normalized FHIR facts, BioClinicalBERT retrieval, and a LangGraph planner/executor workflow. Structured verification remains authoritative over semantic retrieval. Human approval gates cohort export, and lineage records connect agents, prompts, models, tools, data, and decisions.
 
-Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray, Kubernetes, Helm, and controlled release mechanisms. They are documented but not runtime dependencies in Phase 0.
+Deferred integrations include Temporal, Ray, Kubernetes, Helm, and controlled release mechanisms. CrewAI is implemented only as a bounded downstream MCP client; it is not a control plane.
 
 ## Implemented versus planned
 
@@ -72,7 +72,8 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | Local Qwen structured planning with deterministic fallback | Implemented (Phase 3B bounded local development) |
 | Workflow Console, Approval Queue, Audit Explorer, Agent Catalog | Implemented (Phase 3B bounded local development) |
 | Hosted LLM planning and cohort export | Not implemented |
-| MCP/CrewAI interoperability | Planned |
+| MCP gateway | Implemented (Phase 4A) |
+| CrewAI downstream oncology research client | Implemented (Phase 4B bounded local development) |
 ## Phase 3C planner comparison
 
 An administrator configures an allowlist of installed localhost Ollama tags;
@@ -84,3 +85,39 @@ reported model metadata without persisting cache paths or generated model
 artifacts. Safety is a hard gate; quality scores cannot override policy
 failures. The measured output is ignored and surfaced through
 `/api/v1/planner-policy`; it is synthetic development evaluation only.
+
+## Phase 4A MCP gateway
+
+The separate `apps/mcp_server` process uses the official Python MCP SDK. Its
+Streamable HTTP and stdio transports terminate at a validation/authentication
+boundary, then call the existing `ToolRegistry`, domain repositories, and
+retrieval services. Client identity and dataset access are server-configured;
+actor roles cannot be supplied in tool arguments. `mcp_requests` stores safe
+application audit metadata separately from LangGraph checkpoints and workflow
+tables. MCP records are joined into the existing Audit Explorer response.
+
+```mermaid
+flowchart LR
+    Client[MCP client] --> Transport[SDK stdio or Streamable HTTP]
+    Transport --> Auth[Development client authentication]
+    Auth --> Policy[Role, dataset, limit, and retrieval policy]
+    Policy --> Registry[Existing ToolRegistry]
+    Registry --> Domain[Existing retrieval and structured FHIR services]
+    Domain --> Audit[(mcp_requests audit lineage)]
+    Domain --> Result[Bounded structured MCP result]
+```
+
+MCP is tool-focused only. It does not change the LangGraph topology or expose
+workflow finalization, human approval, model selection, raw resources, SQL,
+shell, or filesystem capabilities.
+
+## Phase 4B downstream CrewAI client
+
+`apps/crewai_client` is a separate sequential CrewAI application. Its four
+agents receive only role-scoped thin tools backed by the official MCP client;
+no agent receives database sessions, FHIR repositories, raw resources, model
+configuration, or arbitrary network tools. Candidate discovery is followed by
+structured evidence collection, provenance review, and a brief writer. The
+brief is persisted with MCP request references and stops at
+`awaiting_human_review`. Local background execution is bounded to one run and
+is not durable across process failure; LangGraph remains the control plane.

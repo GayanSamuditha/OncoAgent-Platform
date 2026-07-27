@@ -11,7 +11,11 @@ from app.db.base import Base
 
 class ClinicalDocument(Base):
     __tablename__ = "clinical_documents"
-    __table_args__ = (UniqueConstraint("dataset_id", "patient_id", "encounter_id", "document_type", "document_version"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_id", "patient_id", "encounter_id", "document_type", "document_version"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"), index=True)
     patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
@@ -28,14 +32,18 @@ class ClinicalDocument(Base):
     source_resource_count: Mapped[int] = mapped_column(Integer)
     builder_version: Mapped[str] = mapped_column(String(40))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class ClinicalDocumentChunk(Base):
     __tablename__ = "clinical_document_chunks"
     __table_args__ = (UniqueConstraint("document_id", "chunk_index"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    document_id: Mapped[str] = mapped_column(ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True)
+    document_id: Mapped[str] = mapped_column(
+        ForeignKey("clinical_documents.id", ondelete="CASCADE"), index=True
+    )
     chunk_index: Mapped[int] = mapped_column(Integer)
     chunk_text: Mapped[str] = mapped_column(Text)
     chunk_text_sha256: Mapped[str] = mapped_column(String(64))
@@ -48,9 +56,15 @@ class ClinicalDocumentChunk(Base):
 
 class ClinicalEmbedding(Base):
     __tablename__ = "clinical_embeddings"
-    __table_args__ = (UniqueConstraint("document_chunk_id", "model_revision", "pooling_method", "chunking_version"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "document_chunk_id", "model_revision", "pooling_method", "chunking_version"
+        ),
+    )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    document_chunk_id: Mapped[str] = mapped_column(ForeignKey("clinical_document_chunks.id", ondelete="CASCADE"), index=True)
+    document_chunk_id: Mapped[str] = mapped_column(
+        ForeignKey("clinical_document_chunks.id", ondelete="CASCADE"), index=True
+    )
     dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id"), index=True)
     patient_id: Mapped[str] = mapped_column(ForeignKey("patients.id"), index=True)
     encounter_id: Mapped[str | None] = mapped_column(ForeignKey("encounters.id"), nullable=True)
