@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 through Phase 4A are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, optional local planner selection through Ollama, and a separate governed MCP tool gateway. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
+Phase 1 through Phase 4B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, optional local planner selection through Ollama, a separate governed MCP tool gateway, and CrewAI as a downstream MCP-only oncology research client. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
 
 Phase 2 smoke test:
 
@@ -219,3 +219,38 @@ records sanitized arguments, client/actor identity, correlation ID, tool
 version, latency, result size, and retrieval fallback lineage in
 `mcp_requests`. MCP records are included in Audit Explorer. The gateway is
 localhost-only by default and obeys `MCP_ENABLED`.
+
+## Phase 4B CrewAI downstream client
+
+`apps/crewai_client` is a separate open-source CrewAI 1.15.7 application. It
+uses local Ollama (`llama3.2:3b` by default, `qwen3:8b` as the configured
+secondary) and a sequential four-agent crew. Clinical access is exclusively
+through the official MCP Streamable HTTP client; agents receive no database,
+FHIR repository, FastAPI, archive, or Ollama configuration handles. The
+assigned MCP tools are role-scoped and read-only, memory and delegation are
+disabled, model and dataset selection are server-controlled, and all output
+stops at `awaiting_human_review`.
+
+Install the isolated client into the local Python environment with
+`python3.12 -m pip install -e apps/crewai_client`. Configure the ignored
+`CREWAI_MCP_CLIENT_ID`, `CREWAI_MCP_TOKEN`, and
+`CREWAI_MCP_DATASET_IDS` values in `.env`, then run the MCP gateway and API.
+The downstream console is `/crewai`; run records are available under
+`/api/v1/crews/oncology-research/runs`. Local background execution is bounded
+to one process-isolated run and is not durable across process failure; the
+LangGraph workflow remains the governed control plane. A process restart marks
+in-flight CrewAI runs failed with `process_interrupted` and never resumes a
+partial model call.
+
+Run the source-controlled 17-case synthetic evaluation sequentially with:
+
+```bash
+python scripts/evaluate_crewai.py --base-url http://127.0.0.1:8000 \
+  --model llama3.2:3b --evaluation-file evaluations/crewai/phase4b_cases.json \
+  --output evaluation_outputs/crewai/phase4b_llama.json
+```
+
+The measured summary is maintained in
+[`evaluations/crewai/phase4b_evaluation_summary.md`](evaluations/crewai/phase4b_evaluation_summary.md).
+Generated outputs are ignored and must not be presented as clinical or
+production performance.

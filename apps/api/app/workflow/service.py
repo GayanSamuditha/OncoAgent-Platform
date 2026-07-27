@@ -34,7 +34,12 @@ def checkpointer(settings: Settings) -> Iterator[PostgresSaver]:
         yield saver
 
 
-def invoke_run(run_id: str, settings: Settings, initial_state: dict[str, Any] | None = None, resume: dict[str, Any] | None = None) -> None:
+def invoke_run(
+    run_id: str,
+    settings: Settings,
+    initial_state: dict[str, Any] | None = None,
+    resume: dict[str, Any] | None = None,
+) -> None:
     try:
         with checkpointer(settings) as saver:
             graph = build_graph(saver)
@@ -44,7 +49,17 @@ def invoke_run(run_id: str, settings: Settings, initial_state: dict[str, Any] | 
             else:
                 graph.invoke(Command(resume=resume), config)
     except Exception as exc:
-        update_run(run_id, status="failed", current_node="fail_safely", errors=[f"{type(exc).__name__}: {exc}"], completed_at=datetime.now(UTC), final_result={"errors": [str(exc)], "synthetic_data_notice": "Synthetic Synthea data only."})
+        update_run(
+            run_id,
+            status="failed",
+            current_node="fail_safely",
+            errors=[f"{type(exc).__name__}: {exc}"],
+            completed_at=datetime.now(UTC),
+            final_result={
+                "errors": [str(exc)],
+                "synthetic_data_notice": "Synthetic Synthea data only.",
+            },
+        )
         event(run_id, run_id, "failed", "fail_safely", {"error_category": type(exc).__name__})
         raise
 
@@ -52,9 +67,55 @@ def invoke_run(run_id: str, settings: Settings, initial_state: dict[str, Any] | 
 def create_run(request: RunCreateRequest, actor: ActorContext, settings: Settings) -> WorkflowRun:
     run_id = str(uuid4())
     with SessionLocal.begin() as session:
-        run = WorkflowRun(id=run_id, thread_id=run_id, dataset_id=request.dataset_id, actor_id=actor.actor_id, actor_role=actor.role, original_request=request.request, structured_input={"criteria": [item.model_dump(mode="json") for item in request.criteria or []], "max_candidates": request.max_candidates, "planner_provider": request.planner_provider}, retrieval_policy={}, status="created", current_node="intake", correlation_id=str(uuid4()), warnings=[], errors=[])
+        run = WorkflowRun(
+            id=run_id,
+            thread_id=run_id,
+            dataset_id=request.dataset_id,
+            actor_id=actor.actor_id,
+            actor_role=actor.role,
+            original_request=request.request,
+            structured_input={
+                "criteria": [item.model_dump(mode="json") for item in request.criteria or []],
+                "max_candidates": request.max_candidates,
+                "planner_provider": request.planner_provider,
+            },
+            retrieval_policy={},
+            status="created",
+            current_node="intake",
+            correlation_id=str(uuid4()),
+            warnings=[],
+            errors=[],
+        )
         session.add(run)
-    initial = {"run_id": run_id, "thread_id": run_id, "actor_context": actor.model_dump(mode="json"), "dataset_id": request.dataset_id, "original_request": request.request, "structured_input": {"criteria": [item.model_dump(mode="json") for item in request.criteria or []], "max_candidates": request.max_candidates, "planner_provider": request.planner_provider}, "retrieval_attempts": [], "retrieval_fallbacks": [], "candidate_patient_ids": [], "candidate_document_ids": [], "candidate_results": [], "verification_results": [], "evidence_items": [], "included_patient_ids": [], "excluded_patient_ids": [], "policy_decisions": [], "cancellation_requested": False, "warnings": [], "errors": [], "run_status": "created", "current_node": "intake", "created_at": datetime.now(UTC).isoformat(), "updated_at": datetime.now(UTC).isoformat()}
+    initial = {
+        "run_id": run_id,
+        "thread_id": run_id,
+        "actor_context": actor.model_dump(mode="json"),
+        "dataset_id": request.dataset_id,
+        "original_request": request.request,
+        "structured_input": {
+            "criteria": [item.model_dump(mode="json") for item in request.criteria or []],
+            "max_candidates": request.max_candidates,
+            "planner_provider": request.planner_provider,
+        },
+        "retrieval_attempts": [],
+        "retrieval_fallbacks": [],
+        "candidate_patient_ids": [],
+        "candidate_document_ids": [],
+        "candidate_results": [],
+        "verification_results": [],
+        "evidence_items": [],
+        "included_patient_ids": [],
+        "excluded_patient_ids": [],
+        "policy_decisions": [],
+        "cancellation_requested": False,
+        "warnings": [],
+        "errors": [],
+        "run_status": "created",
+        "current_node": "intake",
+        "created_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
     invoke_run(run_id, settings, initial_state=initial)
     with SessionLocal() as session:
         result = session.get(WorkflowRun, run_id)
@@ -78,22 +139,46 @@ def resume_run(run: WorkflowRun, decision: dict[str, Any], settings: Settings) -
 
 def list_events(run_id: str) -> list[WorkflowEvent]:
     with SessionLocal() as session:
-        return list(session.scalars(select(WorkflowEvent).where(WorkflowEvent.run_id == run_id).order_by(WorkflowEvent.created_at, WorkflowEvent.id)))
+        return list(
+            session.scalars(
+                select(WorkflowEvent)
+                .where(WorkflowEvent.run_id == run_id)
+                .order_by(WorkflowEvent.created_at, WorkflowEvent.id)
+            )
+        )
 
 
 def list_evidence(run_id: str) -> list[WorkflowEvidence]:
     with SessionLocal() as session:
-        return list(session.scalars(select(WorkflowEvidence).where(WorkflowEvidence.run_id == run_id).order_by(WorkflowEvidence.patient_id, WorkflowEvidence.criterion_id)))
+        return list(
+            session.scalars(
+                select(WorkflowEvidence)
+                .where(WorkflowEvidence.run_id == run_id)
+                .order_by(WorkflowEvidence.patient_id, WorkflowEvidence.criterion_id)
+            )
+        )
 
 
 def list_candidates(run_id: str) -> list[WorkflowCandidate]:
     with SessionLocal() as session:
-        return list(session.scalars(select(WorkflowCandidate).where(WorkflowCandidate.run_id == run_id).order_by(WorkflowCandidate.retrieval_rank)))
+        return list(
+            session.scalars(
+                select(WorkflowCandidate)
+                .where(WorkflowCandidate.run_id == run_id)
+                .order_by(WorkflowCandidate.retrieval_rank)
+            )
+        )
 
 
 def list_tools(run_id: str) -> list[WorkflowToolCall]:
     with SessionLocal() as session:
-        return list(session.scalars(select(WorkflowToolCall).where(WorkflowToolCall.run_id == run_id).order_by(WorkflowToolCall.started_at)))
+        return list(
+            session.scalars(
+                select(WorkflowToolCall)
+                .where(WorkflowToolCall.run_id == run_id)
+                .order_by(WorkflowToolCall.started_at)
+            )
+        )
 
 
 def get_approval_request(approval_id: str) -> ApprovalRequest | None:

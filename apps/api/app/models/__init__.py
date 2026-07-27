@@ -1,5 +1,14 @@
 """SQLAlchemy models."""
 
+from app.models.crewai import (
+    CrewAgent,
+    CrewEvent,
+    CrewLineage,
+    CrewOutput,
+    CrewReview,
+    CrewRun,
+    CrewTask,
+)
 from app.models.ingestion import (
     Condition,
     Dataset,
@@ -60,4 +69,11 @@ __all__ = [
     "PolicyDecision",
     "WorkflowLineage",
     "MCPRequest",
+    "CrewRun",
+    "CrewAgent",
+    "CrewTask",
+    "CrewEvent",
+    "CrewOutput",
+    "CrewReview",
+    "CrewLineage",
 ]

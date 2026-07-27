@@ -15,6 +15,7 @@ class RerankerMetadata:
 
 class RerankerProvider(Protocol):
     metadata: RerankerMetadata
+
     def load(self) -> None: ...
     def rerank(self, query: str, candidates: list[dict[str, Any]]) -> list[float]: ...
     def health(self) -> dict[str, Any]: ...
@@ -22,7 +23,9 @@ class RerankerProvider(Protocol):
 
 class MedCPTRerankerProvider:
     def __init__(self, model_name: str, revision: str, device: str, batch_size: int = 4) -> None:
-        self.metadata = RerankerMetadata("medcpt_cross_encoder", model_name, revision, select_device(device), batch_size)
+        self.metadata = RerankerMetadata(
+            "medcpt_cross_encoder", model_name, revision, select_device(device), batch_size
+        )
         self.tokenizer: Any = None
         self.model: Any = None
         self.error: str | None = None
@@ -32,11 +35,25 @@ class MedCPTRerankerProvider:
             return
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
-            self.tokenizer = cast(Any, AutoTokenizer).from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False)
+
+            self.tokenizer = cast(Any, AutoTokenizer).from_pretrained(
+                self.metadata.model_name,
+                revision=self.metadata.model_revision,
+                trust_remote_code=False,
+            )
             try:
-                self.model = AutoModelForSequenceClassification.from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False, use_safetensors=True)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.metadata.model_name,
+                    revision=self.metadata.model_revision,
+                    trust_remote_code=False,
+                    use_safetensors=True,
+                )
             except OSError:
-                self.model = AutoModelForSequenceClassification.from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    self.metadata.model_name,
+                    revision=self.metadata.model_revision,
+                    trust_remote_code=False,
+                )
             self.model.eval()
             self.model.to(self.metadata.device)
         except Exception as exc:
@@ -46,6 +63,7 @@ class MedCPTRerankerProvider:
     def rerank(self, query: str, candidates: list[dict[str, Any]]) -> list[float]:
         self.load()
         import torch
+
         scores: list[float] = []
         start = 0
         batch_size = max(1, self.metadata.batch_size)
@@ -53,7 +71,14 @@ class MedCPTRerankerProvider:
             end = min(len(candidates), start + batch_size)
             texts = [str(item.get("text_excerpt", "")) for item in candidates[start:end]]
             try:
-                encoded = self.tokenizer([query] * len(texts), texts, padding=True, truncation=True, max_length=512, return_tensors="pt")
+                encoded = self.tokenizer(
+                    [query] * len(texts),
+                    texts,
+                    padding=True,
+                    truncation=True,
+                    max_length=512,
+                    return_tensors="pt",
+                )
                 encoded = {key: value.to(self.metadata.device) for key, value in encoded.items()}
                 with torch.inference_mode():
                     logits = self.model(**encoded).logits
@@ -65,13 +90,25 @@ class MedCPTRerankerProvider:
                     raise
                 batch_size = max(1, batch_size // 2)
                 if hasattr(self.metadata, "batch_size"):
-                    self.metadata = RerankerMetadata(self.metadata.provider_id, self.metadata.model_name, self.metadata.model_revision, self.metadata.device, batch_size)
+                    self.metadata = RerankerMetadata(
+                        self.metadata.provider_id,
+                        self.metadata.model_name,
+                        self.metadata.model_revision,
+                        self.metadata.device,
+                        batch_size,
+                    )
                 if hasattr(torch, "mps") and torch.backends.mps.is_available():
                     torch.mps.empty_cache()
         return scores
 
     def health(self) -> dict[str, Any]:
-        return {"configured": True, "loaded": self.model is not None, "available": self.model is not None and self.error is None, "error": self.error, **self.metadata.__dict__}
+        return {
+            "configured": True,
+            "loaded": self.model is not None,
+            "available": self.model is not None and self.error is None,
+            "error": self.error,
+            **self.metadata.__dict__,
+        }
 
 
 class DeterministicFakeReranker:
@@ -83,7 +120,10 @@ class DeterministicFakeReranker:
 
     def rerank(self, query: str, candidates: list[dict[str, Any]]) -> list[float]:
         terms = set(query.lower().split())
-        return [float(len(terms & set(str(item.get("text_excerpt", "")).lower().split()))) for item in candidates]
+        return [
+            float(len(terms & set(str(item.get("text_excerpt", "")).lower().split())))
+            for item in candidates
+        ]
 
     def health(self) -> dict[str, Any]:
         return {"configured": True, "loaded": True, "available": True, **self.metadata.__dict__}

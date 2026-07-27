@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.services.crewai import recover_incomplete_runs
 
 logger = structlog.get_logger(__name__)
 
@@ -16,6 +17,14 @@ logger = structlog.get_logger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
+    try:
+        recovered = recover_incomplete_runs()
+        if recovered:
+            logger.warning("crewai_runs_marked_interrupted", count=recovered)
+    except Exception:
+        # Health must remain available even when the optional CrewAI
+        # persistence database is unavailable during startup.
+        logger.warning("crewai_recovery_unavailable")
     logger.info("api_started", version=settings.app_version, environment=settings.environment)
     yield
     logger.info("api_stopped")

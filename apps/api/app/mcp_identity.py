@@ -60,7 +60,11 @@ def configured_clients(settings: Settings) -> dict[str, MCPClientIdentity]:
         assert isinstance(actor_id, str)
         assert isinstance(actor_role, str)
         result[client_id] = MCPClientIdentity(
-            client_id, token, actor_id, actor_role, client_type,
+            client_id,
+            token,
+            actor_id,
+            actor_role,
+            client_type,
             frozenset(str(value) for value in datasets),
         )
     return result

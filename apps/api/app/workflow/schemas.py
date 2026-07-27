@@ -3,8 +3,21 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CriterionType = Literal["minimum_age", "maximum_age", "gender", "condition", "observation", "procedure", "medication", "diagnostic_report", "encounter_type", "date_window"]
-CriterionStatus = Literal["verified", "not_verified", "conflicting", "missing_data", "not_applicable"]
+CriterionType = Literal[
+    "minimum_age",
+    "maximum_age",
+    "gender",
+    "condition",
+    "observation",
+    "procedure",
+    "medication",
+    "diagnostic_report",
+    "encounter_type",
+    "date_window",
+]
+CriterionStatus = Literal[
+    "verified", "not_verified", "conflicting", "missing_data", "not_applicable"
+]
 
 
 class Criterion(BaseModel):

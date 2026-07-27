@@ -9,7 +9,8 @@
 7. **Phase 3B — Local Qwen planner and operations console:** local-only structured planning, deterministic fallback, prompt/model lineage, workflow console, approval queue, audit explorer, and agent catalog.
 8. **Phase 4A — Governed MCP tool gateway:** official Python MCP SDK, read-only registry tools, development identity, dataset isolation, Streamable HTTP/stdio, and MCP audit lineage.
 9. **Phase 4B — Full-stack workflow experience:** researcher run console, evidence views, approval review, lineage, and audit exploration.
-10. **Phase 5 — MCP and CrewAI interoperability:** expose platform tools and demonstrate CrewAI as a downstream consumer; neither becomes the core runtime.
+10. **Phase 4B — CrewAI downstream oncology research crew:** sequential local CrewAI client, MCP-only tools, structured outputs, lineage, and mandatory human review.
+11. **Phase 5 — MCP interoperability hardening:** broader downstream integration patterns; CrewAI remains a consumer and neither becomes the core runtime.
 10. **Phase 6 — Temporal and Ray:** add durable orchestration and batch embedding/evaluation only after the vertical MVP is stable.
 11. **Phase 7 — Kubernetes and controlled releases:** package deployment, monitoring, shadow/canary workflows, and operational runbooks.
 

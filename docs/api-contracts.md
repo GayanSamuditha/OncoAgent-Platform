@@ -56,3 +56,10 @@ localhost gateway. Stdio uses `MCP_STDIO_CLIENT_ID` and `MCP_STDIO_TOKEN` for
 local integration. Tool arguments use a strict `request` object matching the
 registered Pydantic input contract. Results include typed safe error objects,
 synthetic-data notices, and no raw FHIR payloads.
+
+## Phase 4B CrewAI contracts
+
+- `GET /api/v1/crews`, `/crews/oncology-research`, and `/crews/oncology-research/status` expose downstream-client configuration without credentials.
+- `POST /api/v1/crews/oncology-research/runs` accepts a strict dataset-scoped request and returns `202`; it does not accept MCP URLs/tokens, arbitrary models/tools, SQL, paths, or approval decisions.
+- Run inspection is available at `/crews/oncology-research/runs/{run_id}`, `/events`, `/tasks`, and `/output`; output excludes scratchpads and raw FHIR.
+- `POST /crews/oncology-research/runs/{run_id}/review` accepts only the documented synthetic-research review decisions. Only reviewer/admin roles may decide, and the initiating researcher cannot accept their own run. Duplicate decisions return `409`.

@@ -22,5 +22,7 @@
 | MCP credential misuse | Localhost-only transport, server-side client allowlist, token redaction, role and dataset checks | Production OAuth and identity federation |
 | MCP arbitrary tool execution | Exact registry catalog, strict Pydantic envelopes, read-only descriptors, no SQL/shell/filesystem tools | Signed tool manifests and centralized authorization |
 | MCP response exfiltration | Synthetic-only dataset policy, result/byte limits, approved structured fields, no raw FHIR | DLP and network policy |
+| Downstream CrewAI bypasses platform controls | MCP-only adapters, per-agent allowlists, client/dataset authorization, no direct DB/FHIR handles | Production identity and network enforcement |
+| CrewAI self-approval or unsupported brief | Structured outputs, provenance checks, mandatory separate human review, terminal decisions | External review service |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.
