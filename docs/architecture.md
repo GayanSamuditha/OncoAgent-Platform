@@ -32,6 +32,12 @@ flowchart LR
 
 Normalized Phase 1 facts feed deterministic encounter documents with title/body representations and tokenizer-aware chunks. Phase 2.5 provides provider isolation: MedCPT uses separate Query and Article encoders with CLS pooling, while BioClinicalBERT remains a mean-pooled comparison encoder. Both use L2-normalized vectors and exact pgvector search; PostgreSQL full-text search is the lexical baseline. Phase 2.6 combines lexical and dense ranks with RRF and optionally reranks a bounded candidate pool with the MedCPT cross-encoder. First-stage ranks/scores and reranker logits remain separately visible. Model loading is lazy, so health endpoints remain available when weights are unavailable. Documents, chunks, and search results retain source-resource lineage. No profile is promoted based on assumptions; the expanded bounded evaluation currently recommends MedCPT for development use, with BioClinicalBERT retained as comparison/fallback and no reranker enabled by default.
 
+## Phase 3A governed LangGraph architecture
+
+Phase 3A adds one persistent `StateGraph` with typed JSON-serializable state: intake → deterministic plan → plan validation → policy precheck → bounded retrieval → structured FHIR verification → evidence validation → policy postcheck → idempotent approval preparation → `interrupt()` → approval/rejection/cancellation → completion. The graph is compiled per invocation with `langgraph-checkpoint-postgres`; application workflow, approval, policy, and lineage tables remain separate institutional audit records.
+
+The deterministic planner accepts explicit criteria and a bounded natural-language vocabulary. It cannot emit SQL, shell, filesystem paths, URLs, or unregistered tools. Retrieval is candidate generation only. Every required criterion is verified against normalized structured FHIR data before approval is requested. Evidence contains criterion status and source FHIR resource IDs, while raw FHIR JSON is not returned in workflow endpoints. Development actor headers simulate identity only; they are not production authentication.
+
 ## Future target architecture
 
 The planned vertical slice adds a bounded Synthea importer, normalized FHIR facts, BioClinicalBERT retrieval, and a LangGraph planner/executor workflow. Structured verification remains authoritative over semantic retrieval. Human approval gates cohort export, and lineage records connect agents, prompts, models, tools, data, and decisions.
@@ -50,7 +56,8 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | MedCPT dual-encoder retrieval | Implemented (bounded local development) |
 | BioClinicalBERT comparison retrieval | Implemented (bounded local development) |
 | PostgreSQL full-text baseline | Implemented (bounded local development) |
-| LangGraph workflow | Planned |
-| Structured FHIR verification | Planned |
-| Human approval | Planned |
+| LangGraph governed cohort workflow | Implemented (Phase 3A bounded local development) |
+| Structured FHIR verification and evidence provenance | Implemented (Phase 3A) |
+| Human approval interruption and resume | Implemented (Phase 3A) |
+| LLM-backed planning and cohort export | Planned |
 | MCP/CrewAI interoperability | Planned |

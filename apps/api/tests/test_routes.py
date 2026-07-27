@@ -17,7 +17,10 @@ def test_platform_info_declares_phase_zero_capabilities(client: TestClient) -> N
     assert body["data_policy"] == "Synthetic Synthea data only."
     assert body["clinical_validation_status"] == "Not clinically validated."
     assert "Platform health and readiness reporting" in body["capabilities"]["implemented"]
-    assert "LangGraph governed workflows" in body["capabilities"]["planned"]
+    assert (
+        "Governed LangGraph cohort workflow with human approval"
+        in body["capabilities"]["implemented"]
+    )
 
 
 def test_ready_reports_database_failure(client: TestClient) -> None:

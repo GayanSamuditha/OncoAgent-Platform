@@ -15,3 +15,17 @@ Queries PostgreSQL with `SELECT 1`. It returns HTTP 200 with `status: ready` whe
 ## `GET /api/v1/platform/info`
 
 Returns platform identity, the synthetic-only policy, the not-clinically-validated status, and separate implemented/planned capability lists.
+
+## Phase 3A workflow contracts
+
+Workflow endpoints require development-only `X-Actor-Id` and `X-Actor-Role` headers. Roles are `researcher`, `reviewer`, and `admin`; these headers do not provide production authentication.
+
+- `POST /api/v1/runs` creates a bounded run and returns `run_id`, `thread_id`, status, and links.
+- `GET /api/v1/runs/{run_id}` returns inspectable status, plan, approval, warnings, errors, and final result metadata.
+- `GET /api/v1/runs/{run_id}/events`, `/evidence`, and `/candidates` return bounded paginated audit data.
+- `GET /api/v1/runs/{run_id}/stream` emits safe workflow events only; it never emits private reasoning.
+- `POST /api/v1/approvals/{approval_id}/decision` accepts `approve`, `reject`, `request_changes`, or `cancel`. Approve/reject/request-changes decisions require reviewer/admin and approval cannot be made by the initiating researcher.
+- `POST /api/v1/runs/{run_id}/cancel` cancels a pending run subject to actor policy.
+- `GET /api/v1/audit-events` and `GET /api/v1/workflow-policy` expose audit inspection and current execution controls.
+
+Workflow retrieval uses MedCPT, then BioClinicalBERT, then PostgreSQL FTS. The cross-encoder is not enabled automatically. Retrieved candidates are never final cohort members until normalized structured FHIR verification succeeds and a reviewer approves the interrupted run.

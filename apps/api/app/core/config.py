@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     reranker_model_revision: str = Field(default="main", validation_alias="RERANKER_MODEL_REVISION")
     reranker_batch_size: int = Field(default=4, validation_alias="RERANKER_BATCH_SIZE")
     rrf_constant: int = Field(default=60, validation_alias="RRF_CONSTANT")
+    agent_execution_enabled: bool = Field(default=True, validation_alias="AGENT_EXECUTION_ENABLED")
+    workflow_max_candidates: int = Field(default=50, validation_alias="WORKFLOW_MAX_CANDIDATES")
+    workflow_tool_timeout_seconds: int = Field(default=10, validation_alias="WORKFLOW_TOOL_TIMEOUT_SECONDS")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore"
