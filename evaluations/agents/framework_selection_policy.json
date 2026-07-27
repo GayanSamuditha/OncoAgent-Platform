@@ -1,0 +1,21 @@
+{
+  "status": "measured_policy",
+  "synthetic_development_evaluation": true,
+  "not_clinically_validated": true,
+  "not_production_performance": true,
+  "frameworks": {
+    "langgraph": {
+      "recommended_use_cases": ["regulated operational cohort workflows", "durable approval-gated execution"],
+      "required_controls": ["PostgreSQL checkpoints", "structured plan validation", "structured FHIR verification", "human approval"],
+      "disallowed_use_cases": ["clinical diagnosis", "treatment recommendation", "raw patient export"],
+      "justification": "Explicit state transitions, durable checkpoint recovery, and approval interrupts make LangGraph the control-plane choice."
+    },
+    "crewai": {
+      "recommended_use_cases": ["bounded specialist collaboration", "MCP evidence gathering", "research brief drafting"],
+      "required_controls": ["MCP-only access", "role-scoped tools", "structured output validation", "mandatory human review"],
+      "disallowed_use_cases": ["control-plane execution", "self approval", "durable recovery", "clinical care"],
+      "justification": "Sequential downstream collaboration is useful for research-oriented decomposition, but local execution is not durable and cannot replace LangGraph."
+    }
+  },
+  "selection_rule": "Do not select a universal framework winner; choose by governance and durability requirements."
+}

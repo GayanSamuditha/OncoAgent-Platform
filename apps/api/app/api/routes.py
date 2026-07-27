@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.cross_framework.registry import framework_agents
 from app.db.session import SessionLocal, get_db
 from app.mcp_identity import configured_clients
 from app.models.crewai import (
@@ -922,24 +923,34 @@ def _evaluation_output() -> dict[str, Any]:
 @router.get("/api/v1/evaluations")
 def evaluations() -> dict[str, object]:
     output = _evaluation_output()
+    cross = _cross_framework_output()
+    items: list[dict[str, Any]] = []
+    if output.get("profiles"):
+        items.append({
+            "evaluation_id": "phase2-6-bounded",
+            "dataset_id": output.get("dataset_id"),
+            "status": output.get("status", "completed"),
+            "synthetic_development_evaluation": True,
+            "not_clinically_validated": True,
+        })
+    if cross.get("status") != "not_available":
+        items.append({
+            "evaluation_id": "cross-framework",
+            "dataset_id": cross.get("dataset_id"),
+            "status": cross.get("status", "completed"),
+            "synthetic_development_evaluation": True,
+            "not_clinically_validated": True,
+        })
     return {
-        "items": [
-            {
-                "evaluation_id": "phase2-6-bounded",
-                "dataset_id": output.get("dataset_id"),
-                "status": output.get("status", "completed"),
-                "synthetic_development_evaluation": True,
-                "not_clinically_validated": True,
-            }
-        ]
-        if output.get("profiles")
-        else [],
+        "items": items,
         "notice": "Synthetic development evaluation; not clinically validated or production performance.",
     }
 
 
 @router.get("/api/v1/evaluations/{evaluation_id}")
 def evaluation(evaluation_id: str) -> dict[str, object]:
+    if evaluation_id == "cross-framework":
+        return _cross_framework_output()
     if evaluation_id == "local-planners":
         return _local_planner_evaluation()
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
@@ -962,6 +973,12 @@ def evaluation_profiles(evaluation_id: str) -> dict[str, object]:
 
 @router.get("/api/v1/evaluations/{evaluation_id}/cases")
 def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[str, object]:
+    if evaluation_id == "cross-framework":
+        output = _cross_framework_output()
+        cases = output.get("cases", [])
+        if category:
+            cases = [case for case in cases if case.get("category") == category]
+        return {"cases": cases, "notice": output.get("notice", "Synthetic development evaluation only.")}
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
         raise HTTPException(status_code=404, detail="evaluation not found")
     output = _evaluation_output()
@@ -974,6 +991,37 @@ def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[st
         "cases": cases,
         "notice": "Case-level results are synthetic development evaluation only.",
     }
+
+
+def _cross_framework_output() -> dict[str, Any]:
+    root = Path(__file__).resolve().parents[4]
+    path = root / "evaluation_outputs/cross_framework_results.json"
+    if not path.exists():
+        return {
+            "status": "not_available",
+            "frameworks": {},
+            "cases": [],
+            "notice": "Synthetic development evaluation; not clinically validated or production performance.",
+        }
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid", "frameworks": {}, "cases": []}
+
+
+@router.get("/api/v1/agents")
+def agent_registry(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    return {
+        "items": [agent.model_dump(mode="json") for agent in framework_agents()],
+        "notice": "Synthetic development registry; not clinically validated.",
+    }
+
+
+@router.get("/api/v1/framework-policy")
+def framework_policy() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[4] / "evaluations/agents/framework_selection_policy.json"
+    if not path.exists():
+        return {"status": "not_available", "frameworks": {}}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid"}
 
 
 @router.get("/api/v1/retrieval-policy")

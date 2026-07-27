@@ -121,3 +121,14 @@ structured evidence collection, provenance review, and a brief writer. The
 brief is persisted with MCP request references and stops at
 `awaiting_human_review`. Local background execution is bounded to one run and
 is not durable across process failure; LangGraph remains the control plane.
+
+## Phase 4C cross-framework governance
+
+The platform exposes a normalized evaluation contract and registry for the
+first-party LangGraph workflow and downstream CrewAI MCP client. Shared
+synthetic scenarios measure outcome matching, provenance, safety, approval
+enforcement, latency, audit completeness, and recovery separately. LangGraph
+is selected for durable regulated operations because PostgreSQL checkpoints
+and explicit approval transitions are part of its topology. CrewAI is selected
+only for bounded downstream specialist collaboration; process interruption is
+not equivalent to checkpoint recovery.

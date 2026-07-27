@@ -28,7 +28,7 @@ def test_missing_credentials_are_rejected_without_database_access() -> None:
 
 def test_unknown_tool_and_unknown_fields_are_rejected() -> None:
     g = gateway()
-    g._audit = lambda *args, **kwargs: None
+    g._audit = lambda *args, **kwargs: None  # type: ignore[method-assign]
     unknown = g.execute("arbitrary_sql", {}, stdio=True)
     assert unknown["error"]["category"] == "unknown_client"
     import os
