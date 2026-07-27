@@ -1,3 +1,8 @@
+import json
+import time
+from pathlib import Path
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,8 +20,8 @@ from app.repositories.ingestion import (
     list_patients,
     patient_count,
 )
-from app.retrieval.model_registry import provider_for
-from app.retrieval.search import last_indexing, postgres_fts_search, search
+from app.retrieval.model_registry import get_reranker, provider_for
+from app.retrieval.search import hybrid_search, last_indexing, postgres_fts_search, search
 from app.schemas.ingestion import (
     DatasetResponse,
     IngestionRunResponse,
@@ -43,22 +48,99 @@ from app.services.timeline import timeline
 router = APIRouter()
 
 
+def _evaluation_output() -> dict[str, Any]:
+    root = Path(__file__).resolve().parents[4]
+    for filename in ("evaluation_outputs/phase2_6_results.json", "evaluation_outputs/phase2_5_results.json"):
+        path = root / filename
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+    return {"status": "not_available", "profiles": {}}
+
+
+@router.get("/api/v1/evaluations")
+def evaluations() -> dict[str, object]:
+    output = _evaluation_output()
+    return {"items": [{"evaluation_id": "phase2-6-bounded", "dataset_id": output.get("dataset_id"), "status": output.get("status", "completed"), "synthetic_development_evaluation": True, "not_clinically_validated": True}] if output.get("profiles") else [], "notice": "Synthetic development evaluation; not clinically validated or production performance."}
+
+
+@router.get("/api/v1/evaluations/{evaluation_id}")
+def evaluation(evaluation_id: str) -> dict[str, object]:
+    if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    return _evaluation_output()
+
+
+@router.get("/api/v1/evaluations/{evaluation_id}/profiles")
+def evaluation_profiles(evaluation_id: str) -> dict[str, object]:
+    if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    output = _evaluation_output()
+    return {"profiles": {name: value.get("metrics", {}) for name, value in output.get("profiles", {}).items()}, "notice": "Synthetic development evaluation; not clinically validated."}
+
+
+@router.get("/api/v1/evaluations/{evaluation_id}/cases")
+def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[str, object]:
+    if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    output = _evaluation_output()
+    cases = [case for profile in output.get("profiles", {}).values() for case in profile.get("cases", [])]
+    if category:
+        cases = [case for case in cases if case.get("category") == category]
+    return {"cases": cases, "notice": "Case-level results are synthetic development evaluation only."}
+
+
+@router.get("/api/v1/retrieval-policy")
+def retrieval_policy() -> dict[str, object]:
+    path = Path(__file__).resolve().parents[4] / "evaluations/retrieval/retrieval_policy.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 @router.post("/api/v1/clinical-search", response_model=ClinicalSearchResponse)
 def clinical_search(request: ClinicalSearchRequest, session: Session = Depends(get_db), settings: Settings = Depends(get_settings)) -> ClinicalSearchResponse:
     if any(item not in {"encounter", "patient-summary"} for item in request.document_types):
         raise HTTPException(status_code=422, detail="unsupported document type")
+    if request.candidate_pool_size < request.top_k:
+        raise HTTPException(status_code=422, detail="candidate_pool_size must be greater than or equal to top_k")
+    started = time.perf_counter()
+    rerank_started = started
+    metadata: dict[str, Any]
+    reranker_metadata: dict[str, Any]
     try:
+        dense_profile = request.retrieval_profile.replace("hybrid_", "")
         if request.retrieval_profile == "postgres_fts":
-            items, latency = postgres_fts_search(session, request.dataset_id, request.query, request.top_k, request.document_types, request.patient_id)
-            metadata = {"query_model_name": "none", "query_model_revision": "none", "document_model_name": "postgresql-fts", "document_model_revision": "database", "representation_strategy": "lexical clinical document text", "normalization_strategy": "none"}
+            items, first_latency = postgres_fts_search(session, request.dataset_id, request.query, request.candidate_pool_size, request.document_types, request.patient_id)
+            metadata = {"query_model_name": "none", "query_model_revision": "none", "document_model_name": "postgresql-fts", "document_model_revision": "database", "representation_strategy": "lexical clinical document text", "normalization_strategy": "none", "lexical_provider": "postgres_fts", "dense_provider": None, "fusion_method": None, "rrf_constant": None}
         else:
-            provider = provider_for(settings, request.retrieval_profile)
-            provider.load()  # type: ignore[attr-defined]
-            items, latency = search(session, provider, request.dataset_id, request.query, request.top_k, request.document_types, request.patient_id, request.minimum_score)
-            metadata = {"query_model_name": provider.metadata.query_model_name, "query_model_revision": provider.metadata.query_model_revision, "document_model_name": provider.metadata.document_model_name, "document_model_revision": provider.metadata.document_model_revision, "representation_strategy": provider.metadata.pooling_strategy, "normalization_strategy": provider.metadata.normalization_strategy}
+            provider = provider_for(settings, dense_profile)
+            provider.load()
+            if request.retrieval_profile.startswith("hybrid_"):
+                items, first_latency = hybrid_search(session, provider, request.dataset_id, request.query, request.candidate_pool_size, request.document_types, request.patient_id, settings.rrf_constant)
+                metadata = {"query_model_name": provider.metadata.query_model_name, "query_model_revision": provider.metadata.query_model_revision, "document_model_name": provider.metadata.document_model_name, "document_model_revision": provider.metadata.document_model_revision, "representation_strategy": provider.metadata.pooling_strategy, "normalization_strategy": provider.metadata.normalization_strategy, "lexical_provider": "postgres_fts", "dense_provider": dense_profile, "fusion_method": "reciprocal_rank_fusion", "rrf_constant": settings.rrf_constant}
+            else:
+                items, first_latency = search(session, provider, request.dataset_id, request.query, request.candidate_pool_size, request.document_types, request.patient_id, request.minimum_score)
+                metadata = {"query_model_name": provider.metadata.query_model_name, "query_model_revision": provider.metadata.query_model_revision, "document_model_name": provider.metadata.document_model_name, "document_model_revision": provider.metadata.document_model_revision, "representation_strategy": provider.metadata.pooling_strategy, "normalization_strategy": provider.metadata.normalization_strategy, "lexical_provider": None, "dense_provider": dense_profile, "fusion_method": None, "rrf_constant": None}
+        if request.reranker == "medcpt_cross_encoder":
+            reranker = get_reranker(settings.reranker_model, settings.reranker_model_revision, settings.embedding_device, settings.reranker_batch_size)
+            reranker.load()
+            logits = reranker.rerank(request.query, items)
+            for item, logit in zip(items, logits, strict=True):
+                item["reranker_logit"] = logit
+            items = sorted(items, key=lambda item: (-float(item["reranker_logit"]), str(item["document_id"])))  # type: ignore[arg-type]
+            for index, item in enumerate(items, 1):
+                item["initial_candidate_rank"] = item.get("initial_candidate_rank", item.get("rank", index))
+                item["reranked_rank"] = index
+                item["final_rank"] = index
+            reranker_metadata = {"reranker_model_name": reranker.metadata.model_name, "reranker_model_revision": reranker.metadata.model_revision}
+        else:
+            reranker_metadata = {"reranker_model_name": None, "reranker_model_revision": None}
+        items = items[:request.top_k]
+        for index, item in enumerate(items, 1):
+            item["rank"] = index
+            item["final_rank"] = index
+        reranking_latency = (time.perf_counter() - rerank_started) * 1000 - first_latency
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=503 if isinstance(exc, RuntimeError) else 422, detail=str(exc)) from exc
-    return ClinicalSearchResponse(query=request.query, dataset_id=request.dataset_id, result_count=len(items), model_name=metadata["document_model_name"], model_revision=metadata["document_model_revision"], search_latency_ms=latency, synthetic_data_notice="Synthetic Synthea data only.", score_notice="Retrieval scores are ranking signals, not clinical probabilities.", retrieval_profile=request.retrieval_profile, **metadata, items=[ClinicalSearchResult.model_validate(item) for item in items])
+    return ClinicalSearchResponse(query=request.query, dataset_id=request.dataset_id, result_count=len(items), model_name=metadata["document_model_name"], model_revision=metadata["document_model_revision"], search_latency_ms=(time.perf_counter() - started) * 1000, synthetic_data_notice="Synthetic Synthea data only.", score_notice="All retrieval and reranking scores are ranking signals, not clinical probabilities.", retrieval_profile=request.retrieval_profile, **metadata, reranker=request.reranker, candidate_pool_size=request.candidate_pool_size, first_stage_latency_ms=first_latency, reranking_latency_ms=max(0, reranking_latency), total_latency_ms=(time.perf_counter() - started) * 1000, **reranker_metadata, items=[ClinicalSearchResult.model_validate(item) for item in items])
 
 
 @router.get("/api/v1/models/clinical-embedding", response_model=ModelStatusResponse)
@@ -67,6 +149,7 @@ def clinical_embedding_status(settings: Settings = Depends(get_settings), sessio
     for profile in ("medcpt", "bioclinicalbert"):
         provider = provider_for(settings, profile)
         statuses[profile] = provider.health()
+    statuses["medcpt_cross_encoder"] = get_reranker(settings.reranker_model, settings.reranker_model_revision, settings.embedding_device, settings.reranker_batch_size).health()
     medcpt = provider_for(settings, "medcpt")
     last = last_indexing(session, medcpt.metadata.document_model_name)
     return ModelStatusResponse(providers=statuses, configured_model=medcpt.metadata.document_model_name, loaded_status="loaded" if medcpt.health()["loaded"] else "not_loaded", device=medcpt.metadata.device, embedding_dimension=medcpt.metadata.embedding_dimension, maximum_sequence_length=medcpt.metadata.document_max_length, pooling_method=medcpt.metadata.pooling_strategy, revision=medcpt.metadata.document_model_revision, last_successful_indexing_time=last.completed_at if last else None, current_limitations=["Synthetic data only.", "Retrieval is not clinical validation.", "MedCPT was trained for PubMed-like biomedical text and may not generalize to all synthetic FHIR phrasing."])

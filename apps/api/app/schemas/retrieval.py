@@ -10,7 +10,9 @@ class ClinicalSearchRequest(BaseModel):
     document_types: list[str] = Field(default_factory=lambda: ["encounter"])
     patient_id: str | None = None
     minimum_score: float | None = Field(default=None, ge=-1, le=1)
-    retrieval_profile: str = Field(default="medcpt", pattern="^(medcpt|bioclinicalbert|postgres_fts)$")
+    retrieval_profile: str = Field(default="bioclinicalbert", pattern="^(medcpt|bioclinicalbert|postgres_fts|hybrid_bioclinicalbert|hybrid_medcpt)$")
+    reranker: str = Field(default="none", pattern="^(none|medcpt_cross_encoder)$")
+    candidate_pool_size: int = Field(default=20, ge=1, le=50)
 
 
 class ClinicalSearchResult(BaseModel):
@@ -28,6 +30,16 @@ class ClinicalSearchResult(BaseModel):
     pooling_method: str
     document_builder_version: str
     chunking_version: str
+    lexical_rank: int | None = None
+    lexical_score: float | None = None
+    dense_rank: int | None = None
+    dense_similarity_score: float | None = None
+    fused_rank: int | None = None
+    fused_score: float | None = None
+    initial_candidate_rank: int | None = None
+    reranked_rank: int | None = None
+    reranker_logit: float | None = None
+    final_rank: int | None = None
 
 
 class ClinicalSearchResponse(BaseModel):
@@ -46,6 +58,17 @@ class ClinicalSearchResponse(BaseModel):
     document_model_revision: str
     representation_strategy: str
     normalization_strategy: str
+    lexical_provider: str | None = None
+    dense_provider: str | None = None
+    fusion_method: str | None = None
+    rrf_constant: int | None = None
+    reranker: str = "none"
+    candidate_pool_size: int = 0
+    first_stage_latency_ms: float = 0.0
+    reranking_latency_ms: float = 0.0
+    total_latency_ms: float = 0.0
+    reranker_model_name: str | None = None
+    reranker_model_revision: str | None = None
     items: list[ClinicalSearchResult]
 
 

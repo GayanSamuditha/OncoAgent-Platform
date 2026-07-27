@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     medcpt_document_revision: str = Field(default="main", validation_alias="MEDCPT_DOCUMENT_REVISION")
     retrieval_query_max_length: int = Field(default=64, validation_alias="RETRIEVAL_QUERY_MAX_LENGTH")
     retrieval_document_max_length: int = Field(default=512, validation_alias="RETRIEVAL_DOCUMENT_MAX_LENGTH")
+    reranker_model: str = Field(default="ncbi/MedCPT-Cross-Encoder", validation_alias="RERANKER_MODEL")
+    reranker_model_revision: str = Field(default="main", validation_alias="RERANKER_MODEL_REVISION")
+    reranker_batch_size: int = Field(default=4, validation_alias="RERANKER_BATCH_SIZE")
+    rrf_constant: int = Field(default=60, validation_alias="RRF_CONSTANT")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore"

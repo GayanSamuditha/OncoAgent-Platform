@@ -38,8 +38,8 @@ def inspect_archive(path: Path) -> None:
     for category, count in sorted(categories.items()):
         print(f"  - {category}: {count}")
     print("representative_fhir_json_members:")
-    for member in representative:
-        print(f"  - {member}")
+    for representative_member in representative:
+        print(f"  - {representative_member}")
     print("extracted: false")
 
 

@@ -10,5 +10,8 @@
 | Unsupported clinical use | UI and documentation safety notices | Product access controls and review policy |
 | Dependency supply-chain risk | Minimal pinned major-version ranges and explicit review rule | Lockfiles, scanning, provenance |
 | Model risk or invented metrics | No model runtime or metrics in Phase 0 | Synthetic evaluation protocol and review |
+| Hybrid/reranker overconfidence | Scores exposed as ranking signals with separate lineage | Structured FHIR verification before any future cohort decision |
+| Candidate-pool resource exhaustion | Maximum 50 candidates and bounded reranker batches | Operational quotas and workload isolation |
+| Cross-dataset leakage | Dataset filters applied to lexical and vector branches | Authorization-scoped dataset access |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.

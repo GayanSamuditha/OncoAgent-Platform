@@ -6,6 +6,7 @@ from app.retrieval.embeddings import (
     DenseRetrievalProvider,
     MedCPTDualEncoderProvider,
 )
+from app.retrieval.reranking import MedCPTRerankerProvider
 
 
 def provider_for(settings: Settings, profile: str | None = None) -> DenseRetrievalProvider:
@@ -25,3 +26,8 @@ def get_medcpt(query: str, document: str, query_revision: str, document_revision
 @lru_cache
 def get_biobert(model: str, revision: str, device: str, max_length: int) -> BioClinicalBERTProvider:
     return BioClinicalBERTProvider(model, revision, device, max_length)
+
+
+@lru_cache
+def get_reranker(model: str, revision: str, device: str, batch_size: int) -> MedCPTRerankerProvider:
+    return MedCPTRerankerProvider(model, revision, device, batch_size)
