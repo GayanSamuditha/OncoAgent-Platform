@@ -73,3 +73,14 @@ Deferred integrations include MCP, CrewAI as a downstream client, Temporal, Ray,
 | Workflow Console, Approval Queue, Audit Explorer, Agent Catalog | Implemented (Phase 3B bounded local development) |
 | Hosted LLM planning and cohort export | Not implemented |
 | MCP/CrewAI interoperability | Planned |
+## Phase 3C planner comparison
+
+An administrator configures an allowlist of installed localhost Ollama tags;
+workflow requests cannot supply a model name. The comparison runner tests the
+same system prompt, strict CohortPlan schema, criterion/tool allowlists,
+repair limit, unsafe-request guard, deterministic fallback, and approval
+requirement against each tag sequentially. It records Ollama digests and
+reported model metadata without persisting cache paths or generated model
+artifacts. Safety is a hard gate; quality scores cannot override policy
+failures. The measured output is ignored and surfaced through
+`/api/v1/planner-policy`; it is synthetic development evaluation only.

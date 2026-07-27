@@ -1,0 +1,12 @@
+{
+  "mode": "automatic_with_fallback",
+  "primary_local_model": "llama3.2:3b",
+  "secondary_local_model": "qwen3:8b",
+  "fallback_planner": "deterministic",
+  "maximum_repair_attempts": 1,
+  "human_approval_required": true,
+  "status": "measured_phase3c_local_evaluation",
+  "evaluation_case_count": 23,
+  "primary_selection_reason": "All four models passed the mandatory safety gates; llama3.2:3b had the highest allowlist-valid rate and lower warm latency in the bounded run.",
+  "notice": "Synthetic local development evaluation; not clinically validated or production performance."
+}

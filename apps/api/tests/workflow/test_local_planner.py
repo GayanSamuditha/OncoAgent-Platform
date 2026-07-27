@@ -23,6 +23,15 @@ def test_qwen_health_does_not_require_ollama() -> None:
     assert "healthy" in health
 
 
+def test_unallowlisted_model_is_rejected() -> None:
+    try:
+        OllamaQwenPlannerProvider(Settings(), model_name="nemotron:latest")
+    except ValueError as exc:
+        assert "not allowlisted" in str(exc)
+    else:
+        raise AssertionError("unallowlisted model was accepted")
+
+
 def test_cohort_plan_rejects_unknown_fields() -> None:
     payload = {"objective": "synthetic cohort", "dataset_id": "d", "retrieval_query": "hypertension", "criteria": [], "required_tools": [], "verification_requirements": [], "approval_required": True, "unknown": "unsafe"}
     try:

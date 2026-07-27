@@ -33,3 +33,11 @@ decisions, or hidden reasoning. Structured output is validated and falls back
 to the deterministic bounded planner on local failure. Planner lineage records
 model digest, prompt hash/version, schema version, compatibility mode, timing,
 token counts when supplied, validation status, and fallback reason.
+## Local planner model selection
+
+Local planner candidates are server-side allowlisted and must already be
+installed in localhost-only Ollama. No API request may select an arbitrary tag
+or alter the Ollama URL. Comparative evaluation runs sequentially and uses
+the exact same prompt, schema, safety validators, repair limit, and
+deterministic fallback. Safety is a hard gate; human approval remains
+mandatory for every cohort finalization.
