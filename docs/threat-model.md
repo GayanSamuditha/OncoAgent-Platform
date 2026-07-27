@@ -17,5 +17,7 @@
 | Tool misuse or arbitrary execution | Pydantic allowlisted registry, read-only tools, bounded arguments and retries | Signed tool manifests and authorization service |
 | Checkpoint/audit divergence | Separate PostgreSQL checkpoint and application audit writes with run/thread correlation | Reconciliation jobs and immutable audit storage |
 | Development identity misuse | Explicit actor headers documented as simulation only | Production authentication, authorization, and identity federation |
+| Hosted model or patient-data egress | Localhost-only Ollama URL validation; no hosted provider dependency | Network policy and production identity controls |
+| Prompt injection or unsafe planner output | Schema validation, allowlisted criteria/tools, deterministic fallback, no reasoning persistence | Signed prompt registry and adversarial CI suite |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.

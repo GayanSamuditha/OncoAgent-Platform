@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 from app.retrieval.embeddings import select_device
 
@@ -32,7 +32,7 @@ class MedCPTRerankerProvider:
             return
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False)
+            self.tokenizer = cast(Any, AutoTokenizer).from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False)
             try:
                 self.model = AutoModelForSequenceClassification.from_pretrained(self.metadata.model_name, revision=self.metadata.model_revision, trust_remote_code=False, use_safetensors=True)
             except OSError:

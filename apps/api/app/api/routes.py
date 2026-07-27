@@ -47,9 +47,11 @@ from app.schemas.retrieval import (
 from app.services.health import database_is_available
 from app.services.timeline import timeline
 from app.workflow.audit import existing_decision
+from app.workflow.planner import PLANNING_SYSTEM_PROMPT, OllamaQwenPlannerProvider
 from app.workflow.schemas import (
     ActorContext,
     ApprovalDecisionRequest,
+    Criterion,
     RunCreateRequest,
     RunResponse,
 )
@@ -73,7 +75,7 @@ def development_actor(x_actor_id: str | None = Header(default=None), x_actor_rol
 
 
 def _run_response(run: WorkflowRun) -> RunResponse:
-    return RunResponse(run_id=run.id, thread_id=run.thread_id, status=run.status, current_node=run.current_node, created_at=run.created_at, dataset_id=run.dataset_id, actor_id=run.actor_id, actor_role=run.actor_role, approval_id=run.approval_id, structured_plan=run.structured_plan, final_result=run.final_result, warnings=run.warnings, errors=run.errors, links={"self": f"/api/v1/runs/{run.id}", "events": f"/api/v1/runs/{run.id}/events", "evidence": f"/api/v1/runs/{run.id}/evidence", "candidates": f"/api/v1/runs/{run.id}/candidates"})
+    return RunResponse(run_id=run.id, thread_id=run.thread_id, status=run.status, current_node=run.current_node, created_at=run.created_at, dataset_id=run.dataset_id, actor_id=run.actor_id, actor_role=run.actor_role, approval_id=run.approval_id, structured_plan=run.structured_plan, planner_lineage=run.planner_lineage, final_result=run.final_result, warnings=run.warnings, errors=run.errors, links={"self": f"/api/v1/runs/{run.id}", "events": f"/api/v1/runs/{run.id}/events", "evidence": f"/api/v1/runs/{run.id}/evidence", "candidates": f"/api/v1/runs/{run.id}/candidates"})
 
 
 def _safe_model(item: Any) -> dict[str, Any]:
@@ -214,12 +216,46 @@ def workflow_policy(settings: Settings = Depends(get_settings), _: ActorContext 
     return {"agent_execution_enabled": settings.agent_execution_enabled, "max_candidates": settings.workflow_max_candidates, "approval_required": True, "allowed_roles": ["researcher", "reviewer", "admin"], "retrieval_policy": {"primary": "medcpt", "fallbacks": ["bioclinicalbert", "postgres_fts"], "reranker": "none"}, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
 
 
+@router.get("/api/v1/models/local-runtime")
+def local_runtime_status(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    provider = OllamaQwenPlannerProvider(settings)
+    health = provider.health()
+    return {"runtime": "ollama", "endpoint_policy": "localhost-only", "enabled": settings.local_llm_enabled, "model": settings.local_llm_model, "status": health, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
+
+
+@router.get("/api/v1/models/planners")
+def planner_statuses(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    qwen = OllamaQwenPlannerProvider(settings).health()
+    return {"providers": {"qwen_local": qwen, "deterministic": {"provider_id": "deterministic", "runtime": "python", "configured": True, "available": True, "healthy": True, "supports_structured_output": True, "limitations": ["Bounded vocabulary; unsupported requests require clarification."]}}, "active_provider": settings.planner_default_provider, "fallback_provider": settings.planner_fallback_provider, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
+
+
+@router.get("/api/v1/models/planners/{provider_id}")
+def planner_status(provider_id: str, settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    if provider_id == "qwen_local":
+        return OllamaQwenPlannerProvider(settings).health()
+    if provider_id == "deterministic":
+        return {"provider_id": "deterministic", "runtime": "python", "configured": True, "available": True, "healthy": True, "supports_structured_output": True}
+    raise HTTPException(status_code=404, detail="planner provider not found")
+
+
+@router.post("/api/v1/models/planners/qwen_local/smoke-test")
+def planner_smoke_test(actor: ActorContext = Depends(development_actor), settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    if actor.role != "admin":
+        raise HTTPException(status_code=403, detail="admin role required")
+    try:
+        outcome = OllamaQwenPlannerProvider(settings).generate_cohort_plan("synthetic adults with hypertension", "synthetic-smoke-dataset", [Criterion(criterion_id="age-minimum", criterion_type="minimum_age", value=18, operator="gte"), Criterion(criterion_id="condition", criterion_type="condition", clinical_concept="hypertension")], 5)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail={"category": getattr(exc, "category", "generation_failure"), "message": str(exc)}) from exc
+    return {"provider": "qwen_local", "plan": outcome.plan.model_dump(mode="json"), "lineage": outcome.lineage, "prompt_id": "qwen_cohort_planning", "prompt_version": "phase3b-planner-v1", "prompt_length": len(PLANNING_SYSTEM_PROMPT)}
+
+
 def _evaluation_output() -> dict[str, Any]:
     root = Path(__file__).resolve().parents[4]
     for filename in ("evaluation_outputs/phase2_6_results.json", "evaluation_outputs/phase2_5_results.json"):
         path = root / filename
         if path.exists():
-            return json.loads(path.read_text(encoding="utf-8"))
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+            return loaded if isinstance(loaded, dict) else {"status": "invalid", "profiles": {}}
     return {"status": "not_available", "profiles": {}}
 
 
@@ -258,7 +294,8 @@ def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[st
 @router.get("/api/v1/retrieval-policy")
 def retrieval_policy() -> dict[str, object]:
     path = Path(__file__).resolve().parents[4] / "evaluations/retrieval/retrieval_policy.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {}
 
 
 @router.post("/api/v1/clinical-search", response_model=ClinicalSearchResponse)
@@ -374,12 +411,12 @@ def platform_info(settings: Settings = Depends(get_settings)) -> PlatformInfoRes
         data_policy="Synthetic Synthea data only.",
         clinical_validation_status="Not clinically validated.",
         capabilities=CapabilitySet(
-            implemented=["Platform health and readiness reporting", "Foundation metadata API", "Bounded clinical retrieval", "Governed LangGraph cohort workflow with human approval"],
+            implemented=["Platform health and readiness reporting", "Foundation metadata API", "Bounded clinical retrieval", "Governed LangGraph cohort workflow with human approval", "Local Qwen structured planning with deterministic fallback", "Workflow Console, Approval Queue, Audit Explorer, and Agent Catalog"],
             planned=[
                 "Bounded Synthea ingestion",
                 "BioClinicalBERT retrieval",
-                "LLM-backed planning provider",
-                "Human approval workflows",
+                "Hosted LLM-backed planning providers",
+                "Clinical cohort export",
                 "MCP and CrewAI interoperability",
                 "Temporal and Ray execution",
                 "Kubernetes and controlled releases",

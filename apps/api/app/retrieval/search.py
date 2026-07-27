@@ -26,7 +26,7 @@ def search(session: Session, provider: DenseRetrievalProvider, dataset_id: str, 
         if minimum_score is not None and score < minimum_score:
             continue
         rows.append({"rank": len(rows) + 1, "document_id": document.id, "chunk_id": chunk.id, "patient_id": embedding.patient_id, "encounter_id": embedding.encounter_id, "document_type": document.document_type, "text_excerpt": chunk.chunk_text[:600], "similarity_score": score, "source_fhir_resource_ids": chunk.source_resource_ids, "model_name": embedding.document_model_name, "model_revision": embedding.document_model_revision, "pooling_method": embedding.pooling_method, "document_builder_version": embedding.document_builder_version, "chunking_version": embedding.chunking_version})
-    return rows, (time.perf_counter() - started) * 1000  # type: ignore[return-value]
+    return rows, (time.perf_counter() - started) * 1000
 
 
 def last_indexing(session: Session, model_name: str) -> IndexingRun | None:
@@ -42,7 +42,7 @@ def postgres_fts_search(session: Session, dataset_id: str, query: str, top_k: in
     if patient_id:
         statement = statement.where(ClinicalDocument.patient_id == patient_id)
     rows = [{"rank": index, "document_id": doc.id, "chunk_id": None, "patient_id": doc.patient_id, "encounter_id": doc.encounter_id, "document_type": doc.document_type, "text_excerpt": doc.text[:600], "similarity_score": float(score), "source_fhir_resource_ids": doc.source_resource_ids, "model_name": "postgresql-fts", "model_revision": "database", "pooling_method": "lexical", "document_builder_version": doc.builder_version, "chunking_version": "none"} for index, (doc, score) in enumerate(session.execute(statement), 1)]
-    return rows, (time.perf_counter() - started) * 1000  # type: ignore[return-value]
+    return rows, (time.perf_counter() - started) * 1000
 
 
 def reciprocal_rank_fusion(lexical: list[dict[str, object]], dense: list[dict[str, object]], constant: int = 60, limit: int = 20) -> list[dict[str, object]]:

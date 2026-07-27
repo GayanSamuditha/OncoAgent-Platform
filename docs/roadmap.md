@@ -6,7 +6,7 @@
 4. **Phase 2.5 — Model-agnostic retrieval:** MedCPT query/article dual encoder, provider-specific lineage, BioClinicalBERT comparison, and PostgreSQL full-text baseline.
 5. **Phase 2.6 — Hybrid and reranked retrieval:** Reciprocal Rank Fusion, bounded MedCPT cross-encoder reranking, comparative evaluation, failure analysis, policy selection, and the Evaluations dashboard.
 6. **Phase 3A — Governed LangGraph workflow:** deterministic allowlisted planning, PostgreSQL checkpoints, retrieval fallback, structured FHIR verification, evidence provenance, approval interruption, cancellation, kill switch, and audit lineage.
-7. **Phase 3B — Planner and workflow console:** optional LLM-backed planning under policy, workflow console, approvals UI, and richer evidence views.
+7. **Phase 3B — Local Qwen planner and operations console:** local-only structured planning, deterministic fallback, prompt/model lineage, workflow console, approval queue, audit explorer, and agent catalog.
 8. **Phase 4 — Full-stack workflow experience:** researcher run console, evidence views, approval review, lineage, and audit exploration.
 9. **Phase 5 — MCP and CrewAI interoperability:** expose platform tools and demonstrate CrewAI as a downstream consumer; neither becomes the core runtime.
 10. **Phase 6 — Temporal and Ray:** add durable orchestration and batch embedding/evaluation only after the vertical MVP is stable.

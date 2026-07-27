@@ -14,8 +14,10 @@ type PlatformInfo = {
   clinical_validation_status: string;
   capabilities: { implemented: string[]; planned: string[] };
 };
+type LocalRuntime = { model: string; status?: { healthy?: boolean; installed?: boolean; resolved_model_digest?: string } };
 
 const navigation = ["Overview", "Agent Catalog", "Workflow Console", "Approvals", "Evaluations", "Deployments", "Audit Explorer"];
+const navigationLinks: Record<string, string> = { "Overview": "/", "Agent Catalog": "/agent-catalog", "Workflow Console": "/workflow", "Approvals": "/approvals", "Evaluations": "/evaluations", "Deployments": "#planned", "Audit Explorer": "/audit" };
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function readJson<T>(path: string): Promise<T> {
@@ -45,13 +47,15 @@ export default function OverviewPage() {
   const [info, setInfo] = useState<PlatformInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [backendError, setBackendError] = useState(false);
+  const [localRuntime, setLocalRuntime] = useState<LocalRuntime | null>(null);
 
   useEffect(() => {
-    Promise.allSettled([readJson<Health>("/health"), readJson<Readiness>("/ready"), readJson<PlatformInfo>("/api/v1/platform/info")])
-      .then(([healthResult, readinessResult, infoResult]) => {
+    Promise.allSettled([readJson<Health>("/health"), readJson<Readiness>("/ready"), readJson<PlatformInfo>("/api/v1/platform/info"), readJson<LocalRuntime>("/api/v1/models/local-runtime")])
+      .then(([healthResult, readinessResult, infoResult, localResult]) => {
         if (healthResult.status === "fulfilled") setHealth(healthResult.value);
         if (readinessResult.status === "fulfilled") setReadiness(readinessResult.value);
         if (infoResult.status === "fulfilled") setInfo(infoResult.value);
+        if (localResult.status === "fulfilled") setLocalRuntime(localResult.value);
         setBackendError(healthResult.status === "rejected" && infoResult.status === "rejected");
       })
       .finally(() => setLoading(false));
@@ -71,9 +75,9 @@ export default function OverviewPage() {
           <ul className="space-y-2">
             {navigation.map((item, index) => (
               <li key={item}>
-                <a href={item === "Evaluations" ? "/evaluations" : index === 0 ? "#overview" : "#planned"} className={`block rounded-xl px-4 py-3 text-sm ${index === 0 ? "bg-white/15 font-semibold text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}>
+                <a href={navigationLinks[item]} className={`block rounded-xl px-4 py-3 text-sm ${index === 0 ? "bg-white/15 font-semibold text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}>
                   {item}
-                  {index !== 0 && item !== "Evaluations" && <span className="float-right text-xs text-slate-400">Planned</span>}
+                  {item === "Deployments" && <span className="float-right text-xs text-slate-400">Planned</span>}
                 </a>
               </li>
             ))}
@@ -95,6 +99,7 @@ export default function OverviewPage() {
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             {loading ? <div className="rounded-2xl bg-white p-5 text-sm text-slate-500">Checking platform services…</div> : <StatusCard label="Backend API" state={backendError ? "Unavailable" : health ? "Operational" : "Unavailable"} detail={backendError ? "Start FastAPI on port 8000 to connect this console." : "FastAPI health endpoint is responding."} />}
             <StatusCard label="PostgreSQL readiness" state={readiness?.status === "ready" ? "Ready" : "Unavailable"} detail={readiness?.status === "ready" ? "Database connectivity is available." : "The API cannot currently verify PostgreSQL readiness."} />
+            <StatusCard label="Local planner" state={localRuntime?.status?.healthy && localRuntime.status.installed ? "Operational" : "Fallback available"} detail={localRuntime ? `${localRuntime.model} · ${localRuntime.status?.resolved_model_digest ? "installed" : "not loaded"}. Deterministic fallback remains enabled.` : "Checking Ollama status…"} />
           </div>
 
           <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">

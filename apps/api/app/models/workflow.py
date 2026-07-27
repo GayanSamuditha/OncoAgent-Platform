@@ -33,6 +33,7 @@ class WorkflowRun(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     final_result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    planner_lineage: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
 
 class WorkflowStep(Base):

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import numpy as np
 
@@ -68,7 +68,7 @@ class _TransformerProvider:
 
     def _load_model(self, name: str, revision: str) -> tuple[Any, Any]:
         from transformers import AutoModel, AutoTokenizer
-        tokenizer = AutoTokenizer.from_pretrained(name, revision=revision, trust_remote_code=False)
+        tokenizer = cast(Any, AutoTokenizer).from_pretrained(name, revision=revision, trust_remote_code=False)
         try:
             model = AutoModel.from_pretrained(name, revision=revision, trust_remote_code=False, use_safetensors=True)
         except OSError:
@@ -85,7 +85,7 @@ class _TransformerProvider:
             output = model(**encoded)
             pooled = cls_pool(output.last_hidden_state) if pooling == POOLING_CLS else mean_pool(output.last_hidden_state, encoded["attention_mask"])
             vectors = normalize_vectors(pooled)
-        return vectors.detach().cpu().tolist()
+        return cast(list[list[float]], vectors.detach().cpu().tolist())
 
     def health(self) -> dict[str, Any]:
         return {"configured": True, "loaded": self.model is not None, "available": self.model is not None and self.error is None, "error": self.error, **self.metadata.__dict__}
