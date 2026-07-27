@@ -15,3 +15,7 @@ Credentials are supplied through environment variables. `.env` files, tokens, an
 ## Dependency and model risk
 
 Dependencies require a present implementation need. Deferred agent, orchestration, and deployment frameworks must not be installed early. Future model evaluations must use documented synthetic fixtures and must not be presented as clinical performance.
+
+## Retrieval evaluation
+
+Hybrid fusion and cross-encoder reranking are evaluated on the same bounded dataset and structured-ground-truth cases. RRF constants, candidate-pool sizes, model revisions, latency, negative results, and failure analysis are recorded. Similarity and reranker logits are ranking signals, not clinical probabilities. Profile selection is policy-controlled and must consider quality, latency, memory, complexity, and failure characteristics.

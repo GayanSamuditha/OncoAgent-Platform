@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1, Phase 2, and Phase 2.5 are implemented in bounded local form: deterministic clinical documents, tokenizer-aware chunks, model-agnostic retrieval providers, MedCPT dual-encoder support, BioClinicalBERT comparison support, PostgreSQL full-text baseline, exact pgvector search, and provenance APIs. These encoders are not generative, are not clinical decision-makers, and are not clinically validated. LangGraph workflows, cohort search, and approval workflows are not implemented.
+Phase 1 through Phase 2.6 are implemented in bounded local form: deterministic clinical documents, tokenizer-aware chunks, model-agnostic retrieval providers, MedCPT dual-encoder support, BioClinicalBERT comparison support, PostgreSQL full-text baseline, exact pgvector search, hybrid Reciprocal Rank Fusion, optional bounded MedCPT cross-encoder reranking, provenance APIs, and a retrieval evaluation dashboard. These models are encoders/rankers, not generative models or clinical decision-makers, and are not clinically validated. LangGraph workflows, cohort search, and approval workflows are not implemented.
 
 Phase 2 smoke test:
 
@@ -16,6 +16,17 @@ curl -X POST http://localhost:8000/api/v1/clinical-search -H 'content-type: appl
 ```
 
 MedCPT uses `ncbi/MedCPT-Query-Encoder` for queries and `ncbi/MedCPT-Article-Encoder` for documents, CLS pooling, 64-token query input, and 512-token document input. BioClinicalBERT remains available as a separate mean-pooling comparison profile. PostgreSQL full-text search is the non-neural baseline. Search scores are ranking signals, not clinical probabilities. MedCPT’s PubMed-oriented training domain is a limitation for synthetic FHIR phrasing. Model weights, Hugging Face caches, generated embeddings, and evaluation outputs remain local-only and ignored by Git.
+
+Phase 2.6 adds `hybrid_bioclinicalbert` and `hybrid_medcpt`, using deterministic Reciprocal Rank Fusion with a documented constant of 60. `ncbi/MedCPT-Cross-Encoder` is an optional, bounded reranker over at most 50 candidates; its logits are ranking signals and are never treated as calibrated probabilities. The source-controlled 100-patient evaluation definition is generated from normalized Synthea facts. Run the comparative evaluation with:
+
+```bash
+DATABASE_URL=postgresql+psycopg://oncoagent:oncoagent_dev@localhost:55432/oncoagent \
+apps/api/.venv/bin/python scripts/evaluate_clinical_retrieval.py \
+  --dataset-id <100-patient-dataset-id> \
+  --evaluation-file evaluations/retrieval/phase2_6_cases.json
+```
+
+Machine-readable results are written to ignored `evaluation_outputs/`; the `/evaluations` page displays only measured results. The current bounded policy recommends MedCPT as the dense default, BioClinicalBERT as dense fallback, and no reranker by default. Hybrid and reranked profiles did not justify their added latency. The earlier 25-patient smoke set favored BioClinicalBERT, so this remains a development recommendation rather than a production selection. All findings are synthetic development evaluation only, not production performance.
 
 Only synthetic Synthea data is supported. Raw archives are local inputs and are ignored by Git.
 

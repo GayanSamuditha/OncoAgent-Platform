@@ -1,0 +1,12 @@
+{
+  "recommended_default_profile": "medcpt",
+  "recommended_fallback_profile": "bioclinicalbert",
+  "reranker": "none",
+  "candidate_pool_size": 20,
+  "reason": "Recommend MedCPT for this expanded bounded evaluation: it had higher P@5, Recall@5, and nDCG than BioClinicalBERT, while hybrid and cross-encoder profiles added latency without a consistent quality improvement. BioClinicalBERT remains the dense fallback and PostgreSQL FTS remains available as the low-dependency lexical baseline.",
+  "quality_improvement": "MedCPT improved P@5 from 0.017 to 0.058 and Recall@5 from 0.083 to 0.292 versus BioClinicalBERT on this 48-case evaluation; the earlier 25-patient smoke evaluation favored BioClinicalBERT.",
+  "latency_cost": "Cross-encoder reranking increased median latency to approximately 119-248 ms versus approximately 16-58 ms for first-stage profiles.",
+  "limitations": ["48 cases from one bounded synthetic Synthea sample", "not clinically validated", "not production performance", "PubMed-oriented model training may not match synthetic FHIR phrasing"],
+  "synthetic_development_evaluation": true,
+  "not_clinically_validated": true
+}

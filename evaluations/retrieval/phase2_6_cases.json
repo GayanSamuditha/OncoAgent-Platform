@@ -1,0 +1,824 @@
+{
+  "dataset_id": "6b15ce38-e12c-4482-866e-59d333952024",
+  "synthetic_development_evaluation": true,
+  "not_clinically_validated": true,
+  "ground_truth_source": "normalized structured Synthea FHIR facts",
+  "cases": [
+    {
+      "query_id": "condition-001-001",
+      "query": "Non-small cell lung cancer (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00b9d394-d1e5-4209-8ce1-23ed3af095b4"
+      ],
+      "evidence_explanation": "Structured condition fact: Non-small cell lung cancer (disorder)."
+    },
+    {
+      "query_id": "condition-002-002",
+      "query": "Pulmonary emphysema (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "3631d8a9-8763-4003-97d9-64cf7f246060"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "3631d8a9-8763-4003-97d9-64cf7f246060": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00fcbf02-c80e-43e2-b740-1496fbfbdd9b"
+      ],
+      "evidence_explanation": "Structured condition fact: Pulmonary emphysema (disorder)."
+    },
+    {
+      "query_id": "condition-003-003",
+      "query": "Acute bronchitis (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "cb23eb70-7e80-485f-a2f4-ea6cb10e6875"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "cb23eb70-7e80-485f-a2f4-ea6cb10e6875": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "01976d96-ae30-4f5f-9ec0-f15dbd27ae08"
+      ],
+      "evidence_explanation": "Structured condition fact: Acute bronchitis (disorder)."
+    },
+    {
+      "query_id": "condition-004-004",
+      "query": "Prediabetes",
+      "category": "condition",
+      "expected_patient_ids": [
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "022b8357-40aa-4577-aee2-8c24de7cf4f6"
+      ],
+      "evidence_explanation": "Structured condition fact: Prediabetes."
+    },
+    {
+      "query_id": "condition-005-005",
+      "query": "Acute viral pharyngitis (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "4173b5cd-00eb-45d2-afcd-d49fb268fcf9"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "4173b5cd-00eb-45d2-afcd-d49fb268fcf9": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "02551d2f-9b97-4949-b1d3-3f8d7654625f"
+      ],
+      "evidence_explanation": "Structured condition fact: Acute viral pharyngitis (disorder)."
+    },
+    {
+      "query_id": "condition-006-006",
+      "query": "Female infertility",
+      "category": "condition",
+      "expected_patient_ids": [
+        "aaf4bff4-a8ad-4c69-894a-8dd0a468007e"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "aaf4bff4-a8ad-4c69-894a-8dd0a468007e": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0342429c-773c-44f3-8dd7-a68d8bc2d3fd"
+      ],
+      "evidence_explanation": "Structured condition fact: Female infertility."
+    },
+    {
+      "query_id": "condition-007-007",
+      "query": "Viral sinusitis (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "ccc364bc-bc3e-4249-afac-8dbb6698810b"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "ccc364bc-bc3e-4249-afac-8dbb6698810b": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0454ad93-08e3-4b68-aadf-ea01a92d016c"
+      ],
+      "evidence_explanation": "Structured condition fact: Viral sinusitis (disorder)."
+    },
+    {
+      "query_id": "condition-008-008",
+      "query": "Acute viral pharyngitis (disorder)",
+      "category": "condition",
+      "expected_patient_ids": [
+        "3631d8a9-8763-4003-97d9-64cf7f246060"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "3631d8a9-8763-4003-97d9-64cf7f246060": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0534e362-ad7d-43c7-aee5-bf81b1bc8c1c"
+      ],
+      "evidence_explanation": "Structured condition fact: Acute viral pharyngitis (disorder)."
+    },
+    {
+      "query_id": "observation-001-009",
+      "query": "High Density Lipoprotein Cholesterol measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "30a74896-ca34-4c5a-96b2-57beab7bf402"
+      ],
+      "expected_encounter_ids": [
+        "0184ab83-5d3d-430a-a6c5-e044e6c1e84c"
+      ],
+      "relevance_grades": {
+        "30a74896-ca34-4c5a-96b2-57beab7bf402": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "000b1500-b8e4-4ff5-9601-8d1ec6a28914"
+      ],
+      "evidence_explanation": "Structured observation fact: High Density Lipoprotein Cholesterol."
+    },
+    {
+      "query_id": "observation-002-010",
+      "query": "Estimated Glomerular Filtration Rate measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "30a74896-ca34-4c5a-96b2-57beab7bf402"
+      ],
+      "expected_encounter_ids": [
+        "1170978b-77a7-4cd7-af87-4aab9875532b"
+      ],
+      "relevance_grades": {
+        "30a74896-ca34-4c5a-96b2-57beab7bf402": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00172db2-d0cd-4868-8726-df2fc65895d9"
+      ],
+      "evidence_explanation": "Structured observation fact: Estimated Glomerular Filtration Rate."
+    },
+    {
+      "query_id": "observation-003-011",
+      "query": "Blood Pressure measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "430ccbca-1b8d-487d-9f8a-02dacb524b85"
+      ],
+      "expected_encounter_ids": [
+        "ce57aef0-543f-4050-9b4a-6ea47e8475a8"
+      ],
+      "relevance_grades": {
+        "430ccbca-1b8d-487d-9f8a-02dacb524b85": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00283275-6ebd-4714-a834-21c60905b768"
+      ],
+      "evidence_explanation": "Structured observation fact: Blood Pressure."
+    },
+    {
+      "query_id": "observation-004-012",
+      "query": "Body Mass Index measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "61401246-d5aa-4359-a9d3-7001fd5ab8c1"
+      ],
+      "expected_encounter_ids": [
+        "ae362063-4f84-41ab-81a7-d0055319d2ed"
+      ],
+      "relevance_grades": {
+        "61401246-d5aa-4359-a9d3-7001fd5ab8c1": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "003c0498-c432-4273-ab50-d838702a3e4c"
+      ],
+      "evidence_explanation": "Structured observation fact: Body Mass Index."
+    },
+    {
+      "query_id": "observation-005-013",
+      "query": "FEV1/\u200bFVC measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "3631d8a9-8763-4003-97d9-64cf7f246060"
+      ],
+      "expected_encounter_ids": [
+        "1e2b24af-9eaa-4891-b013-ef5705f1fdd5"
+      ],
+      "relevance_grades": {
+        "3631d8a9-8763-4003-97d9-64cf7f246060": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "003c411d-faa0-4708-8ed3-5c2e0b1fb934"
+      ],
+      "evidence_explanation": "Structured observation fact: FEV1/\u200bFVC."
+    },
+    {
+      "query_id": "observation-006-014",
+      "query": "Creatinine measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "5151b47d-3b42-444c-851d-0b4f9f1850aa"
+      ],
+      "expected_encounter_ids": [
+        "30b9deac-ce93-4d6c-812c-f203a61a96c6"
+      ],
+      "relevance_grades": {
+        "5151b47d-3b42-444c-851d-0b4f9f1850aa": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0050c3b0-c086-4467-9a2d-14bbc35e3e9f"
+      ],
+      "evidence_explanation": "Structured observation fact: Creatinine."
+    },
+    {
+      "query_id": "observation-007-015",
+      "query": "Blood Pressure measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "d9c06432-b7d8-4cfd-b6d2-d67352ae3f06"
+      ],
+      "expected_encounter_ids": [
+        "86a7c6fc-c540-4c67-be4e-0daa237a9aa4"
+      ],
+      "relevance_grades": {
+        "d9c06432-b7d8-4cfd-b6d2-d67352ae3f06": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00582a5d-586f-434f-b81d-facdb9b93b1f"
+      ],
+      "evidence_explanation": "Structured observation fact: Blood Pressure."
+    },
+    {
+      "query_id": "observation-008-016",
+      "query": "Body Mass Index measurement",
+      "category": "observation",
+      "expected_patient_ids": [
+        "6f8e49f5-2f69-4b78-9b93-8cb4af24295f"
+      ],
+      "expected_encounter_ids": [
+        "0cec0e5a-5d30-43c4-9920-8b402b43d9af"
+      ],
+      "relevance_grades": {
+        "6f8e49f5-2f69-4b78-9b93-8cb4af24295f": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "00b3ec66-43e7-42b7-8a28-5caf26f936f1"
+      ],
+      "evidence_explanation": "Structured observation fact: Body Mass Index."
+    },
+    {
+      "query_id": "procedure-001-017",
+      "query": "Plain chest X-ray (procedure)",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf"
+      ],
+      "expected_encounter_ids": [
+        "c63b0c33-adaf-45f3-8cfa-9425496bc8a2"
+      ],
+      "relevance_grades": {
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-00c327580e045a3808da0c174ff2078533a836df5c576d76f4d4abadd8e8ff27"
+      ],
+      "evidence_explanation": "Structured procedure fact: Plain chest X-ray (procedure)."
+    },
+    {
+      "query_id": "procedure-002-018",
+      "query": "Documentation of current medications",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "77deba59-34c6-4fe0-8b4e-f7c4316e4d01"
+      ],
+      "expected_encounter_ids": [
+        "d2830895-a969-4569-bc28-92ce443f99e9"
+      ],
+      "relevance_grades": {
+        "77deba59-34c6-4fe0-8b4e-f7c4316e4d01": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-016c9311692c95227b2da9312f91eb7cb6647b1952fbd30080443a4351651f92"
+      ],
+      "evidence_explanation": "Structured procedure fact: Documentation of current medications."
+    },
+    {
+      "query_id": "procedure-003-019",
+      "query": "Combined chemotherapy and radiation therapy (procedure)",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276"
+      ],
+      "expected_encounter_ids": [
+        "2e09eb1d-8399-45a6-b0ec-6cacda4cf972"
+      ],
+      "relevance_grades": {
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-020f1e1c2e29de1bca42e776b79a975b28aa146647593566be6bb3f0e8b74e1f"
+      ],
+      "evidence_explanation": "Structured procedure fact: Combined chemotherapy and radiation therapy (procedure)."
+    },
+    {
+      "query_id": "procedure-004-020",
+      "query": "Suture open wound",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "13d41396-edb9-4a75-9f99-18dc3b43848d"
+      ],
+      "expected_encounter_ids": [
+        "d1fbc288-7d0c-429c-bb9e-cc202111be2a"
+      ],
+      "relevance_grades": {
+        "13d41396-edb9-4a75-9f99-18dc3b43848d": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-0293ab6f857cc941b2e6014e65849a9e256a489fa3a43d3694051cd9fcbd5102"
+      ],
+      "evidence_explanation": "Structured procedure fact: Suture open wound."
+    },
+    {
+      "query_id": "procedure-005-021",
+      "query": "Combined chemotherapy and radiation therapy (procedure)",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276"
+      ],
+      "expected_encounter_ids": [
+        "2e09eb1d-8399-45a6-b0ec-6cacda4cf972"
+      ],
+      "relevance_grades": {
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-02b20043b96cb82ab0d7df82c21e0570368419ef2906eb4ef73e9e798288d3f2"
+      ],
+      "evidence_explanation": "Structured procedure fact: Combined chemotherapy and radiation therapy (procedure)."
+    },
+    {
+      "query_id": "procedure-006-022",
+      "query": "Documentation of current medications",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "92cf872b-6165-43be-b540-a87e027b344e"
+      ],
+      "expected_encounter_ids": [
+        "ebfed7cc-eb37-43e0-9c34-7fd8235295c9"
+      ],
+      "relevance_grades": {
+        "92cf872b-6165-43be-b540-a87e027b344e": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-02d97efd51a65d7e48f232f07ee4d41dc4fda2a287de064bca80d1d1c0f0e677"
+      ],
+      "evidence_explanation": "Structured procedure fact: Documentation of current medications."
+    },
+    {
+      "query_id": "procedure-007-023",
+      "query": "Documentation of current medications",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "05487e21-cf79-411c-ad82-dc078955bea3"
+      ],
+      "expected_encounter_ids": [
+        "17ed20d2-ecb9-429c-90df-8522d9f2768a"
+      ],
+      "relevance_grades": {
+        "05487e21-cf79-411c-ad82-dc078955bea3": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-0340f0835d2e6a02261ddc3d6d01963f6fde55f5a6d271e94b5ad2ff3ba4e175"
+      ],
+      "evidence_explanation": "Structured procedure fact: Documentation of current medications."
+    },
+    {
+      "query_id": "procedure-008-024",
+      "query": "Documentation of current medications",
+      "category": "procedure",
+      "expected_patient_ids": [
+        "d7f5d1e8-36c6-4c7f-a776-01d7aba72324"
+      ],
+      "expected_encounter_ids": [
+        "ed31a13c-2442-41ba-8170-1d5a5ea071a3"
+      ],
+      "relevance_grades": {
+        "d7f5d1e8-36c6-4c7f-a776-01d7aba72324": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-03ad8d524406b8d9f23333969bdbe4f892f5c890d4afd91b7a0b98848c43bde3"
+      ],
+      "evidence_explanation": "Structured procedure fact: Documentation of current medications."
+    },
+    {
+      "query_id": "medication-001-025",
+      "query": "medication request for Penicillin V Potassium 250 MG",
+      "category": "medication",
+      "expected_patient_ids": [
+        "44e37b39-ac43-4f3b-b6ae-52352f5eb6c5"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "44e37b39-ac43-4f3b-b6ae-52352f5eb6c5": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-016679d105b5b847220a8cb002887ba5b31c49ae0fc301e756af9e5e5e020c5c"
+      ],
+      "evidence_explanation": "Structured medication fact: Penicillin V Potassium 250 MG."
+    },
+    {
+      "query_id": "medication-002-026",
+      "query": "medication request for Penicillin V Potassium 250 MG",
+      "category": "medication",
+      "expected_patient_ids": [
+        "d2d4e195-1def-4123-925b-b3d2c6019422"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "d2d4e195-1def-4123-925b-b3d2c6019422": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-023410dc2c65607266982a66f7fa6aea89b8589cd6242846c97fdc2436b668d8"
+      ],
+      "evidence_explanation": "Structured medication fact: Penicillin V Potassium 250 MG."
+    },
+    {
+      "query_id": "medication-003-027",
+      "query": "medication request for Cisplatin 50 MG Injection",
+      "category": "medication",
+      "expected_patient_ids": [
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-03763dbe70955f928dbd16a97457329cc056c240c9315a8df0c429575382c70d"
+      ],
+      "evidence_explanation": "Structured medication fact: Cisplatin 50 MG Injection."
+    },
+    {
+      "query_id": "medication-004-028",
+      "query": "medication request for Dextromethorphan Hydrobromide 1 MG/ML",
+      "category": "medication",
+      "expected_patient_ids": [
+        "019d2250-eb7a-4ecd-8c8f-c160c5039c3c"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "019d2250-eb7a-4ecd-8c8f-c160c5039c3c": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-03ca4c8fdca26c095af808442e5a06b4af2fc958104cc461fa351fdb245138f3"
+      ],
+      "evidence_explanation": "Structured medication fact: Dextromethorphan Hydrobromide 1 MG/ML."
+    },
+    {
+      "query_id": "medication-005-029",
+      "query": "medication request for Penicillin V Potassium 250 MG",
+      "category": "medication",
+      "expected_patient_ids": [
+        "019d2250-eb7a-4ecd-8c8f-c160c5039c3c"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "019d2250-eb7a-4ecd-8c8f-c160c5039c3c": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-04e27584df85839f4ab6894a8c51ed135353c8f487b226700c3bb8d1d7dbad82"
+      ],
+      "evidence_explanation": "Structured medication fact: Penicillin V Potassium 250 MG."
+    },
+    {
+      "query_id": "medication-006-030",
+      "query": "medication request for PACLitaxel 100 MG Injection",
+      "category": "medication",
+      "expected_patient_ids": [
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "25e8d433-f2f0-4fb2-8d3e-64a170b4c276": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-04ff8b672ab588f49858c51247e56011aae252170910a25d6f6f32e93c6557bb"
+      ],
+      "evidence_explanation": "Structured medication fact: PACLitaxel 100 MG Injection."
+    },
+    {
+      "query_id": "medication-007-031",
+      "query": "medication request for Chlorpheniramine 2 MG Chewable Tablet",
+      "category": "medication",
+      "expected_patient_ids": [
+        "6f8e49f5-2f69-4b78-9b93-8cb4af24295f"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "6f8e49f5-2f69-4b78-9b93-8cb4af24295f": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-05b347c4f834973cdbf47b5148a11efcfee6b0adc70afbb69194fbdb1ee1e65e"
+      ],
+      "evidence_explanation": "Structured medication fact: Chlorpheniramine 2 MG Chewable Tablet."
+    },
+    {
+      "query_id": "medication-008-032",
+      "query": "medication request for Dextromethorphan Hydrobromide 1 MG/ML",
+      "category": "medication",
+      "expected_patient_ids": [
+        "a4bef8d8-ee6e-4714-8ad9-728a24d1370c"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "a4bef8d8-ee6e-4714-8ad9-728a24d1370c": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "synthetic-05f79befbd40da3d0e44d7054271b029d23ea40379075946fdac09390f527cd8"
+      ],
+      "evidence_explanation": "Structured medication fact: Dextromethorphan Hydrobromide 1 MG/ML."
+    },
+    {
+      "query_id": "diagnostic-001-033",
+      "query": "diagnostic report Lipid Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "92cf872b-6165-43be-b540-a87e027b344e"
+      ],
+      "expected_encounter_ids": [
+        "ebfed7cc-eb37-43e0-9c34-7fd8235295c9"
+      ],
+      "relevance_grades": {
+        "92cf872b-6165-43be-b540-a87e027b344e": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "011a0f8a-b7b5-46f4-9bd9-f2198a60bebd"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Lipid Panel."
+    },
+    {
+      "query_id": "diagnostic-002-034",
+      "query": "diagnostic report Lipid Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "d2d4e195-1def-4123-925b-b3d2c6019422"
+      ],
+      "expected_encounter_ids": [
+        "ffd3d1ca-dc3c-4a11-a779-acad7e4f936e"
+      ],
+      "relevance_grades": {
+        "d2d4e195-1def-4123-925b-b3d2c6019422": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "017e54a6-3b5b-4b17-bd8f-d2f7078cd905"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Lipid Panel."
+    },
+    {
+      "query_id": "diagnostic-003-035",
+      "query": "diagnostic report Lipid Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "b97fa171-1a38-4754-a3eb-c545e8521c71"
+      ],
+      "expected_encounter_ids": [
+        "dfe99e12-252b-4303-946f-080bd22d70f6"
+      ],
+      "relevance_grades": {
+        "b97fa171-1a38-4754-a3eb-c545e8521c71": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "035d0da1-d305-439d-9dce-e6581fb25444"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Lipid Panel."
+    },
+    {
+      "query_id": "diagnostic-004-036",
+      "query": "diagnostic report Basic Metabolic Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "5b456081-95eb-48a2-98fe-16f98d78d6fa"
+      ],
+      "expected_encounter_ids": [
+        "87c49208-a508-4f9f-a944-4caea1a5fa43"
+      ],
+      "relevance_grades": {
+        "5b456081-95eb-48a2-98fe-16f98d78d6fa": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "03705955-c59b-41e7-9411-54d2ae108edd"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Basic Metabolic Panel."
+    },
+    {
+      "query_id": "diagnostic-005-037",
+      "query": "diagnostic report Basic Metabolic Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "5b2ce7a9-7cef-4732-8ac0-4003a23e492f"
+      ],
+      "expected_encounter_ids": [
+        "7d4766c9-3f29-4b2d-9f3a-b1401e371064"
+      ],
+      "relevance_grades": {
+        "5b2ce7a9-7cef-4732-8ac0-4003a23e492f": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0595f5e3-de42-46d5-860e-407851de439f"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Basic Metabolic Panel."
+    },
+    {
+      "query_id": "diagnostic-006-038",
+      "query": "diagnostic report Basic Metabolic Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "078d243b-d290-4a43-81ca-8acbcf244994"
+      ],
+      "expected_encounter_ids": [
+        "b15f9d6a-32b0-42f6-8f0c-2b043a78b412"
+      ],
+      "relevance_grades": {
+        "078d243b-d290-4a43-81ca-8acbcf244994": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0781abae-85f7-4a72-8158-8e5338a020c8"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Basic Metabolic Panel."
+    },
+    {
+      "query_id": "diagnostic-007-039",
+      "query": "diagnostic report Basic Metabolic Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "6a8025b7-b282-44f2-ba3b-7ad48e46cb1d"
+      ],
+      "expected_encounter_ids": [
+        "c3cf90d1-746c-4747-99f9-96e6fc09679c"
+      ],
+      "relevance_grades": {
+        "6a8025b7-b282-44f2-ba3b-7ad48e46cb1d": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "07e5ed9b-a2ba-4734-9cee-010afafebb26"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Basic Metabolic Panel."
+    },
+    {
+      "query_id": "diagnostic-008-040",
+      "query": "diagnostic report Basic Metabolic Panel",
+      "category": "diagnostic-report",
+      "expected_patient_ids": [
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf"
+      ],
+      "expected_encounter_ids": [
+        "e72cd004-fc2d-4042-937c-18b07235bf74"
+      ],
+      "relevance_grades": {
+        "23bd75a8-b1d7-4c84-9d39-3ff8eab5dccf": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "085c2c58-37a5-487b-8d1f-fd75863f63e8"
+      ],
+      "evidence_explanation": "Structured diagnostic-report fact: Basic Metabolic Panel."
+    },
+    {
+      "query_id": "encounter-001-041",
+      "query": "ambulatory encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "77deba59-34c6-4fe0-8b4e-f7c4316e4d01"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "77deba59-34c6-4fe0-8b4e-f7c4316e4d01": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "014a67cc-6de2-4c4e-8c7b-64177102edaa"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: ambulatory."
+    },
+    {
+      "query_id": "encounter-002-042",
+      "query": "ambulatory encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "de766483-1af4-47da-a41a-c6ab57920592"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "de766483-1af4-47da-a41a-c6ab57920592": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "018137dd-cf02-4272-954b-9a462ed4327b"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: ambulatory."
+    },
+    {
+      "query_id": "encounter-003-043",
+      "query": "ambulatory encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "1dedaa07-4bdf-4f37-bba2-019164ba85d2"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "1dedaa07-4bdf-4f37-bba2-019164ba85d2": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "02ecf297-a5ca-45fd-9ad9-6013b88abf57"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: ambulatory."
+    },
+    {
+      "query_id": "encounter-004-044",
+      "query": "outpatient encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "ed4aa22d-3f0f-4a96-9fa3-854bc42a9731"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "ed4aa22d-3f0f-4a96-9fa3-854bc42a9731": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "030236a5-f49f-41c4-956b-0730cfef6512"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: outpatient."
+    },
+    {
+      "query_id": "encounter-005-045",
+      "query": "outpatient encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "52d4791b-00cf-42d9-94e5-129281443e87"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "52d4791b-00cf-42d9-94e5-129281443e87": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "0319715c-9b02-4da7-acb5-2560e5ece167"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: outpatient."
+    },
+    {
+      "query_id": "encounter-006-046",
+      "query": "outpatient encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "8028ac1a-818a-4b29-ab8b-a2573629b676"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "8028ac1a-818a-4b29-ab8b-a2573629b676": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "033755d4-c8e8-45a5-ab1c-3523a742b8be"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: outpatient."
+    },
+    {
+      "query_id": "encounter-007-047",
+      "query": "outpatient encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "c63daf75-0c39-441a-970b-1d2c28e98d20"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "c63daf75-0c39-441a-970b-1d2c28e98d20": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "03afa44e-b9e4-4ff1-ac8a-7200308998e1"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: outpatient."
+    },
+    {
+      "query_id": "encounter-008-048",
+      "query": "outpatient encounter",
+      "category": "encounter-type",
+      "expected_patient_ids": [
+        "383fbce8-a4a6-44a1-8570-bdf43de31ca4"
+      ],
+      "expected_encounter_ids": [],
+      "relevance_grades": {
+        "383fbce8-a4a6-44a1-8570-bdf43de31ca4": 1
+      },
+      "relevant_fhir_resource_ids": [
+        "03cc7fc8-d8b7-4cd8-8330-1cb7bbce1cc6"
+      ],
+      "evidence_explanation": "Structured encounter-type fact: outpatient."
+    }
+  ]
+}

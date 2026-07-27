@@ -19,7 +19,7 @@ def main() -> int:
     settings = get_settings()
     provider = provider_for(settings, args.retrieval_provider)
     provider.load()
-    batch_size = args.batch_size or (settings.embedding_batch_size_mps if provider.info.device == "mps" else settings.embedding_batch_size_cpu)
+    batch_size = args.batch_size or (settings.embedding_batch_size_mps if provider.metadata.device == "mps" else settings.embedding_batch_size_cpu)
     started = time.perf_counter()
     with SessionLocal() as session:
         run = index_documents(session, provider, args.dataset_id, settings.embedding_max_sequence_length, settings.embedding_token_overlap, batch_size, args.limit)

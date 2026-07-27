@@ -71,9 +71,9 @@ export default function OverviewPage() {
           <ul className="space-y-2">
             {navigation.map((item, index) => (
               <li key={item}>
-                <a href={index === 0 ? "#overview" : "#planned"} className={`block rounded-xl px-4 py-3 text-sm ${index === 0 ? "bg-white/15 font-semibold text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}>
+                <a href={item === "Evaluations" ? "/evaluations" : index === 0 ? "#overview" : "#planned"} className={`block rounded-xl px-4 py-3 text-sm ${index === 0 ? "bg-white/15 font-semibold text-white" : "text-slate-300 hover:bg-white/10 hover:text-white"}`}>
                   {item}
-                  {index !== 0 && <span className="float-right text-xs text-slate-400">Planned</span>}
+                  {index !== 0 && item !== "Evaluations" && <span className="float-right text-xs text-slate-400">Planned</span>}
                 </a>
               </li>
             ))}
