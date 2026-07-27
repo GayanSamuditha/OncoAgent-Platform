@@ -109,6 +109,22 @@ def _date_window(_: ToolExecutionContext, request: BaseModel) -> dict[str, Any]:
     return {"status": "verified" if start <= value <= end else "not_verified", "timestamp": item.timestamp}
 
 
+def _build_evidence(context: ToolExecutionContext, request: BaseModel) -> dict[str, Any]:
+    item = PatientRequest.model_validate(request)
+    facts: list[dict[str, Any]] = []
+    for model, resource_type in (
+        (Condition, "Condition"),
+        (Observation, "Observation"),
+        (Procedure, "Procedure"),
+        (MedicationRequest, "MedicationRequest"),
+        (DiagnosticReport, "DiagnosticReport"),
+        (Encounter, "Encounter"),
+    ):
+        for row in _rows(context.session, model, item.dataset_id, item.patient_id, maximum=50):
+            facts.append({"resource_type": resource_type, "source_fhir_resource_id": row.get("source_resource_id") or row.get("fhir_id"), "encounter_id": row.get("encounter_id"), "display": row.get("display"), "code": row.get("code"), "code_system": row.get("code_system"), "effective_time": row.get("effective_time") or row.get("performed_start") or row.get("authored_on") or row.get("start_time")})
+    return {"dataset_id": item.dataset_id, "patient_id": item.patient_id, "items": facts[:100], "evidence_status": "structured_facts_only"}
+
+
 def build_tool_registry() -> dict[str, RegisteredTool]:
     roles = ["researcher", "reviewer", "admin"]
     return {
@@ -121,7 +137,7 @@ def build_tool_registry() -> dict[str, RegisteredTool]:
         "get_patient_diagnostic_reports": RegisteredTool(_descriptor("get_patient_diagnostic_reports", "Read normalized diagnostic report facts.", roles), PatientRequest, _resource_handler(DiagnosticReport)),
         "get_patient_encounters": RegisteredTool(_descriptor("get_patient_encounters", "Read normalized encounter facts.", roles), PatientRequest, _resource_handler(Encounter)),
         "verify_date_window": RegisteredTool(_descriptor("verify_date_window", "Verify an ISO timestamp against an explicit date window.", roles), DateWindowRequest, _date_window),
-        "build_patient_evidence": RegisteredTool(_descriptor("build_patient_evidence", "Assemble provenance-linked evidence from structured facts.", roles), PatientRequest, lambda context, request: {"status": "delegated_to_verification_node"}),
+        "build_patient_evidence": RegisteredTool(_descriptor("build_patient_evidence", "Assemble provenance-linked evidence from structured facts.", roles), PatientRequest, _build_evidence),
     }
 
 

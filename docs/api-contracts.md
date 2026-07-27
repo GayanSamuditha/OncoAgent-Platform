@@ -43,3 +43,16 @@ structured planner lineage, never hidden reasoning.
 The local console routes are `/workflow`, `/approvals`, `/audit`, and
 `/agent-catalog`. All displays are synthetic development views and not
 clinical validation.
+
+## Phase 4A MCP inspection contracts
+
+- `GET /api/v1/mcp/status` reports enabled transports and the read-only tool catalog.
+- `GET /api/v1/mcp/clients` reports sanitized development client identities and dataset scopes; tokens are never returned.
+- `GET /api/v1/mcp/tools` reports stable tool names and versions.
+- `GET /api/v1/mcp/requests` and `/mcp/requests/{request_id}` report bounded MCP audit lineage.
+
+The MCP Streamable HTTP endpoint is `/mcp` on the separately started
+localhost gateway. Stdio uses `MCP_STDIO_CLIENT_ID` and `MCP_STDIO_TOKEN` for
+local integration. Tool arguments use a strict `request` object matching the
+registered Pydantic input contract. Results include typed safe error objects,
+synthetic-data notices, and no raw FHIR payloads.

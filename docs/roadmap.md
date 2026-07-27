@@ -7,8 +7,9 @@
 5. **Phase 2.6 — Hybrid and reranked retrieval:** Reciprocal Rank Fusion, bounded MedCPT cross-encoder reranking, comparative evaluation, failure analysis, policy selection, and the Evaluations dashboard.
 6. **Phase 3A — Governed LangGraph workflow:** deterministic allowlisted planning, PostgreSQL checkpoints, retrieval fallback, structured FHIR verification, evidence provenance, approval interruption, cancellation, kill switch, and audit lineage.
 7. **Phase 3B — Local Qwen planner and operations console:** local-only structured planning, deterministic fallback, prompt/model lineage, workflow console, approval queue, audit explorer, and agent catalog.
-8. **Phase 4 — Full-stack workflow experience:** researcher run console, evidence views, approval review, lineage, and audit exploration.
-9. **Phase 5 — MCP and CrewAI interoperability:** expose platform tools and demonstrate CrewAI as a downstream consumer; neither becomes the core runtime.
+8. **Phase 4A — Governed MCP tool gateway:** official Python MCP SDK, read-only registry tools, development identity, dataset isolation, Streamable HTTP/stdio, and MCP audit lineage.
+9. **Phase 4B — Full-stack workflow experience:** researcher run console, evidence views, approval review, lineage, and audit exploration.
+10. **Phase 5 — MCP and CrewAI interoperability:** expose platform tools and demonstrate CrewAI as a downstream consumer; neither becomes the core runtime.
 10. **Phase 6 — Temporal and Ray:** add durable orchestration and batch embedding/evaluation only after the vertical MVP is stable.
 11. **Phase 7 — Kubernetes and controlled releases:** package deployment, monitoring, shadow/canary workflows, and operational runbooks.
 

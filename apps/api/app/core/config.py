@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     local_llm_max_response_bytes: int = Field(default=1048576, ge=1024, le=10485760, validation_alias="LOCAL_LLM_MAX_RESPONSE_BYTES")
     planner_default_provider: str = Field(default="qwen_local", validation_alias="PLANNER_DEFAULT_PROVIDER")
     planner_fallback_provider: str = Field(default="deterministic", validation_alias="PLANNER_FALLBACK_PROVIDER")
+    mcp_enabled: bool = Field(default=True, validation_alias="MCP_ENABLED")
+    mcp_streamable_http_enabled: bool = Field(default=True, validation_alias="MCP_STREAMABLE_HTTP_ENABLED")
+    mcp_stdio_enabled: bool = Field(default=True, validation_alias="MCP_STDIO_ENABLED")
+    mcp_host: str = Field(default="127.0.0.1", validation_alias="MCP_HOST")
+    mcp_port: int = Field(default=8010, ge=1, le=65535, validation_alias="MCP_PORT")
+    mcp_max_results: int = Field(default=50, ge=1, le=100, validation_alias="MCP_MAX_RESULTS")
+    mcp_max_response_bytes: int = Field(default=1048576, ge=1024, le=10485760, validation_alias="MCP_MAX_RESPONSE_BYTES")
+    mcp_request_timeout_seconds: int = Field(default=30, ge=1, le=300, validation_alias="MCP_REQUEST_TIMEOUT_SECONDS")
+    mcp_dev_clients: str = Field(default="", validation_alias="MCP_DEV_CLIENTS")
     local_planner_models: str = Field(
         default="qwen3:8b,qwen2.5:7b,llama3.2:3b,gemma3:4b",
         validation_alias="LOCAL_PLANNER_MODELS",

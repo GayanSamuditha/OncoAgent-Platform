@@ -84,3 +84,28 @@ reported model metadata without persisting cache paths or generated model
 artifacts. Safety is a hard gate; quality scores cannot override policy
 failures. The measured output is ignored and surfaced through
 `/api/v1/planner-policy`; it is synthetic development evaluation only.
+
+## Phase 4A MCP gateway
+
+The separate `apps/mcp_server` process uses the official Python MCP SDK. Its
+Streamable HTTP and stdio transports terminate at a validation/authentication
+boundary, then call the existing `ToolRegistry`, domain repositories, and
+retrieval services. Client identity and dataset access are server-configured;
+actor roles cannot be supplied in tool arguments. `mcp_requests` stores safe
+application audit metadata separately from LangGraph checkpoints and workflow
+tables. MCP records are joined into the existing Audit Explorer response.
+
+```mermaid
+flowchart LR
+    Client[MCP client] --> Transport[SDK stdio or Streamable HTTP]
+    Transport --> Auth[Development client authentication]
+    Auth --> Policy[Role, dataset, limit, and retrieval policy]
+    Policy --> Registry[Existing ToolRegistry]
+    Registry --> Domain[Existing retrieval and structured FHIR services]
+    Domain --> Audit[(mcp_requests audit lineage)]
+    Domain --> Result[Bounded structured MCP result]
+```
+
+MCP is tool-focused only. It does not change the LangGraph topology or expose
+workflow finalization, human approval, model selection, raw resources, SQL,
+shell, or filesystem capabilities.

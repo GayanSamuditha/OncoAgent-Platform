@@ -19,5 +19,8 @@
 | Development identity misuse | Explicit actor headers documented as simulation only | Production authentication, authorization, and identity federation |
 | Hosted model or patient-data egress | Localhost-only Ollama URL validation; no hosted provider dependency | Network policy and production identity controls |
 | Prompt injection or unsafe planner output | Schema validation, allowlisted criteria/tools, deterministic fallback, no reasoning persistence | Signed prompt registry and adversarial CI suite |
+| MCP credential misuse | Localhost-only transport, server-side client allowlist, token redaction, role and dataset checks | Production OAuth and identity federation |
+| MCP arbitrary tool execution | Exact registry catalog, strict Pydantic envelopes, read-only descriptors, no SQL/shell/filesystem tools | Signed tool manifests and centralized authorization |
+| MCP response exfiltration | Synthetic-only dataset policy, result/byte limits, approved structured fields, no raw FHIR | DLP and network policy |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.

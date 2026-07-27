@@ -247,6 +247,7 @@ ollama_models/
 embeddings/
 evaluation_outputs/
 workflow_outputs/
+mcp_outputs/
 .langgraph/
 .cache/
 huggingface_cache/

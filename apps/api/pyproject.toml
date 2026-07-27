@@ -13,6 +13,7 @@ dependencies = [
   "httpx>=0.27,<1",
   "langgraph>=1.0,<2",
   "langgraph-checkpoint-postgres>=3,<4",
+  "mcp>=1.28,<2",
   "psycopg[binary,pool]>=3.2,<4",
   "pgvector>=0.3,<1",
   "torch>=2.5,<3",
@@ -53,6 +54,7 @@ ignore = ["B008"]
 "app/core/config.py" = ["E501"]
 "tests/retrieval/*.py" = ["E501"]
 "tests/workflow/*.py" = ["E501"]
+"tests/mcp/*.py" = ["E501"]
 "app/workflow/*.py" = ["E501"]
 "app/models/workflow.py" = ["E501"]
 

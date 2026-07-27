@@ -10,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal, get_db
+from app.mcp_identity import configured_clients
 from app.models.ingestion import FhirResource
+from app.models.mcp import MCPRequest
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
 from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
 from app.repositories.ingestion import (
@@ -69,6 +71,7 @@ from app.workflow.service import (
     list_evidence,
     resume_run,
 )
+from app.workflow.tools import build_tool_registry
 
 router = APIRouter()
 
@@ -213,7 +216,52 @@ def audit_events(page: int = Query(default=1, ge=1), page_size: int = Query(defa
         if run_id:
             statement = statement.where(WorkflowEvent.run_id == run_id)
         items = [_safe_model(item) for item in session.scalars(statement)]
-    return {"items": items, "page": page, "page_size": page_size}
+        if not run_id:
+            mcp_items = session.scalars(select(MCPRequest).order_by(MCPRequest.started_at.desc()).limit(page_size)).all()
+            items.extend([{**_safe_model(item), "source": "mcp", "event_type": f"mcp.{item.status}", "node_name": item.tool_name, "run_id": None, "mcp_request_id": item.id, "mcp_client_id": item.client_id} for item in mcp_items])
+    items.sort(key=lambda item: str(item.get("created_at") or item.get("started_at") or ""), reverse=True)
+    return {"items": items[:page_size], "page": page, "page_size": page_size}
+
+
+@router.get("/api/v1/mcp/status")
+def mcp_status(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    metadata = {"server_name": "OncoAgent Platform MCP Gateway", "server_version": settings.app_version, "protocol_version": "2025-06-18", "enabled": settings.mcp_enabled, "streamable_http_enabled": settings.mcp_streamable_http_enabled, "stdio_enabled": settings.mcp_stdio_enabled, "host": settings.mcp_host, "port": settings.mcp_port, "tools": [{**item.descriptor.model_dump(), "mcp_exposed": True} for item in build_tool_registry().values()], "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
+    metadata["registered_client_count"] = len(configured_clients(settings))
+    return metadata
+
+
+@router.get("/api/v1/mcp/clients")
+def mcp_clients(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    return {"items": [{"client_id": item.client_id, "actor_id": item.actor_id, "actor_role": item.actor_role, "client_type": item.client_type, "dataset_ids": sorted(item.dataset_ids)} for item in configured_clients(settings).values()], "count": len(configured_clients(settings)), "development_authentication_notice": "Development-only service identity; not production OAuth."}
+
+
+@router.get("/api/v1/mcp/tools")
+def mcp_tools(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return {"items": [{**item.descriptor.model_dump(), "mcp_exposed": True} for item in build_tool_registry().values()], "synthetic_data_notice": "Synthetic Synthea data only."}
+
+
+@router.get("/api/v1/mcp/requests")
+def mcp_requests(page: int = Query(default=1, ge=1), page_size: int = Query(default=25, ge=1, le=100), client_id: str | None = None, tool_name: str | None = None, settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        statement = select(MCPRequest).order_by(MCPRequest.started_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        if client_id:
+            statement = statement.where(MCPRequest.client_id == client_id)
+        if tool_name:
+            statement = statement.where(MCPRequest.tool_name == tool_name)
+        items = [_safe_model(item) for item in session.scalars(statement)]
+    return {"items": items, "page": page, "page_size": page_size, "synthetic_data_notice": "Synthetic Synthea data only."}
+
+
+@router.get("/api/v1/mcp/requests/{request_id}")
+def mcp_request(request_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        item = session.get(MCPRequest, request_id)
+        if item is None:
+            raise HTTPException(status_code=404, detail="MCP request not found")
+        result = _safe_model(item)
+    result["synthetic_data_notice"] = "Synthetic Synthea data only."
+    result["clinical_validation_notice"] = "Not clinically validated."
+    return result
 
 
 @router.get("/api/v1/workflow-policy")
@@ -457,13 +505,13 @@ def platform_info(settings: Settings = Depends(get_settings)) -> PlatformInfoRes
         data_policy="Synthetic Synthea data only.",
         clinical_validation_status="Not clinically validated.",
         capabilities=CapabilitySet(
-            implemented=["Platform health and readiness reporting", "Foundation metadata API", "Bounded clinical retrieval", "Governed LangGraph cohort workflow with human approval", "Local Qwen structured planning with deterministic fallback", "Workflow Console, Approval Queue, Audit Explorer, and Agent Catalog"],
+            implemented=["Platform health and readiness reporting", "Foundation metadata API", "Bounded clinical retrieval", "Governed LangGraph cohort workflow with human approval", "Local Qwen structured planning with deterministic fallback", "Workflow Console, Approval Queue, Audit Explorer, and Agent Catalog", "Governed MCP read-only tool gateway with stdio and Streamable HTTP"],
             planned=[
                 "Bounded Synthea ingestion",
                 "BioClinicalBERT retrieval",
                 "Hosted LLM-backed planning providers",
                 "Clinical cohort export",
-                "MCP and CrewAI interoperability",
+                "CrewAI downstream interoperability",
                 "Temporal and Ray execution",
                 "Kubernetes and controlled releases",
             ],

@@ -13,6 +13,7 @@ from app.models.ingestion import (
     Patient,
     Procedure,
 )
+from app.models.mcp import MCPRequest
 from app.models.retrieval import (
     ClinicalDocument,
     ClinicalDocumentChunk,
@@ -58,4 +59,5 @@ __all__ = [
     "ApprovalDecision",
     "PolicyDecision",
     "WorkflowLineage",
+    "MCPRequest",
 ]

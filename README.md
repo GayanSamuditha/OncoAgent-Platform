@@ -4,7 +4,7 @@ OncoAgent Platform is an enterprise-style foundation for governed agentic AI wor
 
 ## Current status
 
-Phase 1 through Phase 3B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, and optional local Qwen planning through Ollama. Qwen is never loaded in FastAPI and has a strict Pydantic JSON-schema boundary with deterministic fallback. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
+Phase 1 through Phase 4A are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, optional local planner selection through Ollama, and a separate governed MCP tool gateway. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
 
 Phase 2 smoke test:
 
@@ -192,3 +192,30 @@ unsupported-request, prompt-injection, and approval-bypass resistance must
 each be 100%; otherwise deterministic planning remains the automatic safety
 path. Results are synthetic local development measurements, not clinical
 validation or production performance.
+
+## Phase 4A governed MCP gateway
+
+Phase 4A adds a separate official Python MCP SDK gateway. It supports
+Streamable HTTP at `http://127.0.0.1:8010/mcp` and stdio for local clients.
+Only the ten existing read-only `phase3a-tool-v1` tools are exposed. MCP
+delegates to the existing registry and domain services; it does not expose
+SQL, raw FHIR, filesystem access, model selection, approval, export, or audit
+mutation.
+
+Configure development-only clients in ignored `.env` using `MCP_DEV_CLIENTS`
+as a JSON array containing client ID, token, actor role, client type, and
+dataset IDs. This is not production OAuth. Start the gateway with:
+
+```bash
+make mcp-dev
+# or for local MCP client integration:
+make mcp-stdio
+```
+
+MCP requests require a configured client credential, enforce dataset
+allowlists, synthetic-dataset checks, retrieval-profile allowlists, result
+limits, response-size limits, and safe typed error categories. Each request
+records sanitized arguments, client/actor identity, correlation ID, tool
+version, latency, result size, and retrieval fallback lineage in
+`mcp_requests`. MCP records are included in Audit Explorer. The gateway is
+localhost-only by default and obeys `MCP_ENABLED`.
