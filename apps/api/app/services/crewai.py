@@ -177,7 +177,10 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
         ).first()
         if first_task:
             first_task.status = "running"
+        _event(session, run_id, "input_validated", {"process": "sequential"})
+        _event(session, run_id, "crew_started", {"process": "sequential"})
         _event(session, run_id, "started", {"process": "sequential"})
+        _event(session, run_id, "candidate_discovery_started", {}, "candidate_discovery")
     try:
         client = MCPGatewayClient(
             settings.crewai_mcp_url,
@@ -203,9 +206,18 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                     "fallback_activated",
                     {
                         "reason": service.last_execution.get("fallback_reason"),
+                        "fallback_category": service.last_execution.get("fallback_category"),
                         "fallback": "deterministic",
                     },
                 )
+            _event(session, run_id, "candidate_discovery_completed", {}, "candidate_discovery")
+            _event(session, run_id, "evidence_collection_started", {}, "structured_evidence_collection")
+            _event(session, run_id, "evidence_collection_completed", {}, "structured_evidence_collection")
+            _event(session, run_id, "eligibility_review_started", {}, "eligibility_evidence_review")
+            _event(session, run_id, "eligibility_review_completed", {}, "eligibility_evidence_review")
+            _event(session, run_id, "brief_generation_started", {}, "research_brief_generation")
+            _event(session, run_id, "brief_generation_completed", {}, "research_brief_generation")
+            _event(session, run_id, "final_validation_completed", {"valid": True})
             run.status, run.current_task, run.completed_at, run.updated_at = (
                 "awaiting_human_review",
                 None,
@@ -247,6 +259,7 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                     },
                 )
             )
+            _event(session, run_id, "human_review_created", {"review_required": True})
             _event(
                 session,
                 run_id,

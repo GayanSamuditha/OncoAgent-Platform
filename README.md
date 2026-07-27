@@ -254,3 +254,21 @@ The measured summary is maintained in
 [`evaluations/crewai/phase4b_evaluation_summary.md`](evaluations/crewai/phase4b_evaluation_summary.md).
 Generated outputs are ignored and must not be presented as clinical or
 production performance.
+
+## Phase 4C cross-framework governance
+
+Shared scenarios are defined in `evaluations/agents/cross_framework_cases.json`
+and run through LangGraph and CrewAI with equivalent synthetic criteria. The
+comparison API is `/api/v1/evaluations/cross-framework`. LangGraph remains
+the durable governed control plane; CrewAI remains a bounded downstream MCP
+consumer. The source-controlled selection policy is in
+`evaluations/agents/framework_selection_policy.json` and does not declare a
+universal framework winner.
+### Cross-framework governance
+
+Phase 4D adds versioned safety outcomes, provenance and lifecycle-audit
+validators, fallback-category analysis, and independent development gates for
+LangGraph and CrewAI. The same source-controlled 16-scenario evaluation is
+used for baseline and hardened reports. Safe clarification, hard rejection,
+and policy prevention are reported separately. Results are synthetic,
+hardware-specific development measurements and are not clinically validated.

@@ -1,0 +1,2 @@
+The request cannot be safely represented using the bounded allowlist. Ask for
+the minimum clarification needed; do not guess clinical criteria.

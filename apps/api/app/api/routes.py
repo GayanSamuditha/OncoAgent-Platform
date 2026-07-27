@@ -13,10 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
+from app.cross_framework.registry import framework_agents
 from app.db.session import SessionLocal, get_db
 from app.mcp_identity import configured_clients
 from app.models.crewai import (
     CrewEvent,
+    CrewLineage,
     CrewOutput,
     CrewReview,
     CrewRun,
@@ -302,6 +304,16 @@ def crew_output(run_id: str, _: ActorContext = Depends(development_actor)) -> di
         "schema_version": item.schema_version,
         "output": item.output_json,
     }
+
+
+@router.get("/api/v1/crews/oncology-research/runs/{run_id}/lineage")
+def crew_lineage(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _crew_get(run_id)
+    with SessionLocal() as session:
+        item = session.scalar(select(CrewLineage).where(CrewLineage.crew_run_id == run_id))
+    if item is None:
+        raise HTTPException(status_code=404, detail="CrewAI lineage is not available")
+    return _safe_model(item)
 
 
 @router.post("/api/v1/crews/oncology-research/runs/{run_id}/cancel")
@@ -630,6 +642,10 @@ def audit_events(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     run_id: str | None = None,
+    framework: str | None = None,
+    source: str | None = None,
+    mcp_correlation_status: str | None = None,
+    governance_violation: bool | None = None,
     _: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
     with SessionLocal() as session:
@@ -679,6 +695,20 @@ def audit_events(
     items.sort(
         key=lambda item: str(item.get("created_at") or item.get("started_at") or ""), reverse=True
     )
+    if source:
+        items = [item for item in items if item.get("source", "workflow") == source]
+    if framework:
+        items = [
+            item
+            for item in items
+            if item.get("framework") == framework
+            or item.get("source") == framework
+            or (framework == "langgraph" and item.get("source", "workflow") == "workflow")
+        ]
+    if mcp_correlation_status == "orphan":
+        items = [item for item in items if item.get("mcp_correlation_status") == "orphan"]
+    if governance_violation is True:
+        items = [item for item in items if item.get("governance_violation") is True]
     return {"items": items[:page_size], "page": page, "page_size": page_size}
 
 
@@ -922,24 +952,34 @@ def _evaluation_output() -> dict[str, Any]:
 @router.get("/api/v1/evaluations")
 def evaluations() -> dict[str, object]:
     output = _evaluation_output()
+    cross = _cross_framework_output()
+    items: list[dict[str, Any]] = []
+    if output.get("profiles"):
+        items.append({
+            "evaluation_id": "phase2-6-bounded",
+            "dataset_id": output.get("dataset_id"),
+            "status": output.get("status", "completed"),
+            "synthetic_development_evaluation": True,
+            "not_clinically_validated": True,
+        })
+    if cross.get("status") != "not_available":
+        items.append({
+            "evaluation_id": "cross-framework",
+            "dataset_id": cross.get("dataset_id"),
+            "status": cross.get("status", "completed"),
+            "synthetic_development_evaluation": True,
+            "not_clinically_validated": True,
+        })
     return {
-        "items": [
-            {
-                "evaluation_id": "phase2-6-bounded",
-                "dataset_id": output.get("dataset_id"),
-                "status": output.get("status", "completed"),
-                "synthetic_development_evaluation": True,
-                "not_clinically_validated": True,
-            }
-        ]
-        if output.get("profiles")
-        else [],
+        "items": items,
         "notice": "Synthetic development evaluation; not clinically validated or production performance.",
     }
 
 
 @router.get("/api/v1/evaluations/{evaluation_id}")
 def evaluation(evaluation_id: str) -> dict[str, object]:
+    if evaluation_id == "cross-framework":
+        return _cross_framework_output()
     if evaluation_id == "local-planners":
         return _local_planner_evaluation()
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
@@ -962,6 +1002,12 @@ def evaluation_profiles(evaluation_id: str) -> dict[str, object]:
 
 @router.get("/api/v1/evaluations/{evaluation_id}/cases")
 def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[str, object]:
+    if evaluation_id == "cross-framework":
+        output = _cross_framework_output()
+        cases = output.get("cases", [])
+        if category:
+            cases = [case for case in cases if case.get("category") == category]
+        return {"cases": cases, "notice": output.get("notice", "Synthetic development evaluation only.")}
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
         raise HTTPException(status_code=404, detail="evaluation not found")
     output = _evaluation_output()
@@ -973,6 +1019,72 @@ def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[st
     return {
         "cases": cases,
         "notice": "Case-level results are synthetic development evaluation only.",
+    }
+
+
+def _cross_framework_output() -> dict[str, Any]:
+    root = Path(__file__).resolve().parents[4]
+    path = root / "evaluation_outputs/cross_framework_results.json"
+    if not path.exists():
+        return {
+            "status": "not_available",
+            "frameworks": {},
+            "cases": [],
+            "notice": "Synthetic development evaluation; not clinically validated or production performance.",
+        }
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid", "frameworks": {}, "cases": []}
+
+
+@router.get("/api/v1/agents")
+def agent_registry(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    output = _cross_framework_output()
+    scorecards = output.get("governance_scorecards", {})
+    enriched = []
+    for agent in framework_agents():
+        item = agent.model_dump(mode="json")
+        framework_key = "langgraph" if agent.framework == "LangGraph" else "crewai"
+        card = scorecards.get(framework_key, {})
+        item["governance_readiness"] = {
+            "failed_gates": card.get("failed_gates", []),
+            "evaluation_version": card.get("version"),
+            "provenance_state": "pass" if "included_patient_required_criterion_provenance_coverage" not in card.get("failed_gates", []) else "remediation_required",
+            "audit_state": "pass" if "required_audit_completeness" not in card.get("failed_gates", []) else "remediation_required",
+            "recovery_state": agent.recovery,
+        }
+        enriched.append(item)
+    return {
+        "items": enriched,
+        "notice": "Synthetic development registry; not clinically validated.",
+    }
+
+
+@router.get("/api/v1/framework-policy")
+def framework_policy() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[4] / "evaluations/agents/framework_selection_policy.json"
+    if not path.exists():
+        return {"status": "not_available", "frameworks": {}}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid"}
+
+
+@router.get("/api/v1/governance/thresholds")
+def governance_thresholds() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[4] / "evaluations/agents/governance_thresholds.json"
+    if not path.exists():
+        return {"status": "not_available"}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {"status": "invalid"}
+
+
+@router.get("/api/v1/governance/scorecard")
+def governance_scorecard() -> dict[str, Any]:
+    output = _cross_framework_output()
+    return {
+        "version": output.get("hardened_metric_version", "phase4d-governance-v1"),
+        "frameworks": output.get("governance_scorecards", {}),
+        "failed_gates": output.get("failed_gates", {}),
+        "notice": "Internal synthetic development gates; not regulatory certification.",
     }
 
 
