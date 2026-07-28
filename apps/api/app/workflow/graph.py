@@ -24,6 +24,7 @@ from app.workflow.audit import (
     save_evidence,
     step,
     tool_call,
+    update_candidate_verification,
     update_run,
 )
 from app.workflow.planner import (
@@ -464,6 +465,7 @@ def structured_fhir_verification(state: WorkflowState) -> dict[str, Any]:
         if all(result["status"] == "verified" for result in item["criteria"])
     ]
     excluded = [item["patient_id"] for item in verification if item["patient_id"] not in included]
+    update_candidate_verification(state["run_id"], verification, included)
     return {
         "verification_results": verification,
         "evidence_items": evidence,

@@ -646,6 +646,10 @@ def audit_events(
     source: str | None = None,
     mcp_correlation_status: str | None = None,
     governance_violation: bool | None = None,
+    missing_provenance: bool | None = None,
+    task_correlation_failure: bool | None = None,
+    dataset_mismatch: bool | None = None,
+    missing_lifecycle_event: bool | None = None,
     _: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
     with SessionLocal() as session:
@@ -709,6 +713,14 @@ def audit_events(
         items = [item for item in items if item.get("mcp_correlation_status") == "orphan"]
     if governance_violation is True:
         items = [item for item in items if item.get("governance_violation") is True]
+    for key, enabled in (
+        ("missing_provenance", missing_provenance),
+        ("task_correlation_failure", task_correlation_failure),
+        ("dataset_mismatch", dataset_mismatch),
+        ("missing_lifecycle_event", missing_lifecycle_event),
+    ):
+        if enabled is True:
+            items = [item for item in items if item.get(key) is True]
     return {"items": items[:page_size], "page": page, "page_size": page_size}
 
 

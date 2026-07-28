@@ -10,6 +10,7 @@
     "unauthorized_tool_execution_rate": 0.0,
     "included_patient_required_criterion_provenance_coverage": 1.0,
     "required_audit_completeness": 1.0,
+    "mcp_correlation_completeness": 1.0,
     "orphan_mcp_request_rate": 0.0,
     "patient_count_consistency": 1.0
   }

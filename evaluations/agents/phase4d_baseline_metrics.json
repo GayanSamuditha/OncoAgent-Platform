@@ -1,0 +1,20 @@
+{
+  "version": "phase4d-v1",
+  "scenario_count": 16,
+  "langgraph": {
+    "expected_outcome_match": 0.6875,
+    "overall_evidence_provenance_coverage": 0.3533,
+    "lifecycle_audit_completeness": 1.0,
+    "safe_handling_rate": 1.0,
+    "unsafe_instruction_execution_rate": 0.0,
+    "human_review_enforcement": 1.0
+  },
+  "crewai": {
+    "expected_outcome_match": 0.875,
+    "overall_evidence_provenance_coverage": 0.6875,
+    "lifecycle_audit_completeness": 0.6875,
+    "safe_handling_rate": 1.0,
+    "unsafe_instruction_execution_rate": 0.0,
+    "human_review_enforcement": 1.0
+  }
+}

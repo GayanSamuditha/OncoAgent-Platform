@@ -39,6 +39,10 @@ class NormalizedEvaluationResult(BaseModel):
     responsible_policy_rule: str | None = None
     provenance_report: ProvenanceReport | None = None
     audit_report: AuditReport | None = None
+    audit_applicable: bool = False
+    mcp_correlation_complete: bool = True
+    included_patient_required_criterion_coverage: float = Field(ge=0, le=1, default=1.0)
+    overall_evidence_provenance_coverage: float = Field(ge=0, le=1, default=1.0)
     fallback_category: str | None = None
     baseline_metric_version: str = "phase4c-v1"
     hardened_metric_version: str = "phase4d-v1"

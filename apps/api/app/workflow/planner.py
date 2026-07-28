@@ -410,6 +410,11 @@ def validate_plan_output(plan: CohortPlan, dataset_id: str, max_candidates: int)
         raise LocalPlannerError(
             "schema_policy_violation", "planner exceeded the requested candidate limit"
         )
+    criterion_ids = [item.criterion_id for item in plan.criteria]
+    if len(set(criterion_ids)) != len(criterion_ids):
+        raise LocalPlannerError(
+            "schema_policy_violation", "planner emitted duplicate criterion identifiers"
+        )
     allowed_tools = set(TOOL_BY_TYPE.values()) | {"search_clinical_documents"}
     if set(plan.required_tools) - allowed_tools:
         raise LocalPlannerError("schema_policy_violation", "planner emitted an unregistered tool")
@@ -436,12 +441,20 @@ class DeterministicCohortPlanner:
     def plan(
         self, request: str, dataset_id: str, criteria: list[Criterion] | None, max_candidates: int
     ) -> CohortPlan:
-        selected = [
-            criterion.model_copy(
-                update={"verification_tool": TOOL_BY_TYPE[criterion.criterion_type]}
+        selected = []
+        for index, criterion in enumerate(criteria or []):
+            criterion_id = criterion.criterion_id
+            if criterion_id == "criterion":
+                concept = re.sub(r"[^a-z0-9]+", "-", (criterion.clinical_concept or "").lower()).strip("-")
+                criterion_id = f"{criterion.criterion_type}-{concept or index}"
+            selected.append(
+                criterion.model_copy(
+                    update={
+                        "criterion_id": criterion_id,
+                        "verification_tool": TOOL_BY_TYPE[criterion.criterion_type],
+                    }
+                )
             )
-            for criterion in (criteria or [])
-        ]
         if not selected:
             selected = self._bounded_natural_language_plan(request)
         if not selected:
