@@ -168,6 +168,24 @@ the run records the fallback. Stop Ollama when not testing to conserve memory.
 
 See [docs/governance.md](docs/governance.md) and [docs/threat-model.md](docs/threat-model.md). Do not commit archives, extracted FHIR data, model weights, embeddings, database volumes, secrets, tokens, or `.env` files. Do not invent metrics or describe the platform as clinically validated.
 
+## Local observability
+
+Phase 5A provides optional OpenTelemetry traces, Prometheus metrics, Grafana
+Tempo, Grafana dashboards, and redacted JSON logs. Start the local stack with:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres otel-collector prometheus tempo grafana
+curl -s http://127.0.0.1:8000/api/v1/observability/status
+curl -s http://127.0.0.1:8000/metrics
+```
+
+Open Grafana at `http://127.0.0.1:3001`, Prometheus at
+`http://127.0.0.1:9090`, and the Observability page at
+`http://localhost:3000/observability`. Collector or exporter unavailability
+does not stop the API or clinical workflows. Set `OBSERVABILITY_ENABLED=false`
+to disable tracing and `PROMETHEUS_METRICS_ENABLED=false` to disable the
+metrics endpoint. See [docs/observability.md](docs/observability.md).
+
 ## Phase 3C local planner comparison
 
 Phase 3C evaluates only administrator-allowlisted, already-installed local

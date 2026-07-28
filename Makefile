@@ -2,7 +2,7 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install db-up db-down migrate test lint typecheck check
+.PHONY: install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install db-up db-down observability-up observability-down migrate test lint typecheck check
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -30,6 +30,12 @@ db-up:
 
 db-down:
 	docker compose -f infra/docker-compose.yml down
+
+observability-up:
+	docker compose -f infra/docker-compose.yml up -d otel-collector prometheus tempo grafana
+
+observability-down:
+	docker compose -f infra/docker-compose.yml stop otel-collector prometheus tempo grafana
 
 migrate:
 	cd $(API_DIR) && .venv/bin/alembic upgrade head

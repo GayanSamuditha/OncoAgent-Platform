@@ -16,8 +16,8 @@ type PlatformInfo = {
 };
 type LocalRuntime = { model: string; status?: { healthy?: boolean; installed?: boolean; resolved_model_digest?: string } };
 
-const navigation = ["Overview", "Agent Catalog", "Workflow Console", "Approvals", "Evaluations", "Deployments", "Audit Explorer"];
-const navigationLinks: Record<string, string> = { "Overview": "/", "Agent Catalog": "/agent-catalog", "Workflow Console": "/workflow", "Approvals": "/approvals", "Evaluations": "/evaluations", "Deployments": "#planned", "Audit Explorer": "/audit" };
+const navigation = ["Overview", "Agent Catalog", "Workflow Console", "Approvals", "Evaluations", "Observability", "Deployments", "Audit Explorer"];
+const navigationLinks: Record<string, string> = { "Overview": "/", "Agent Catalog": "/agent-catalog", "Workflow Console": "/workflow", "Approvals": "/approvals", "Evaluations": "/evaluations", "Observability": "/observability", "Deployments": "#planned", "Audit Explorer": "/audit" };
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function readJson<T>(path: string): Promise<T> {

@@ -18,6 +18,14 @@ from app.models.workflow import (
     WorkflowRun,
     WorkflowToolCall,
 )
+from app.observability.metrics import (
+    CHECKPOINT_RESUMES,
+    WORKFLOW_DURATION,
+    WORKFLOW_FAILURES,
+    WORKFLOW_RUNS,
+    observe,
+)
+from app.observability.telemetry import current_trace_context, span
 from app.workflow.audit import event, update_run
 from app.workflow.graph import build_graph
 from app.workflow.schemas import ActorContext, RunCreateRequest
@@ -40,6 +48,21 @@ def invoke_run(
     initial_state: dict[str, Any] | None = None,
     resume: dict[str, Any] | None = None,
 ) -> None:
+    started = datetime.now(UTC)
+    with span("workflow.run", settings, {"workflow.run_id": run_id, "workflow.resume": resume is not None}):
+        _invoke_run(run_id, settings, initial_state, resume)
+    observe(WORKFLOW_DURATION, (datetime.now(UTC) - started).total_seconds(), {"status": "completed"})
+    observe(WORKFLOW_RUNS, labels={"status": "completed", "outcome": "resumed" if resume is not None else "started"})
+    if resume is not None:
+        observe(CHECKPOINT_RESUMES)
+
+
+def _invoke_run(
+    run_id: str,
+    settings: Settings,
+    initial_state: dict[str, Any] | None,
+    resume: dict[str, Any] | None,
+) -> None:
     try:
         with checkpointer(settings) as saver:
             graph = build_graph(saver)
@@ -49,6 +72,7 @@ def invoke_run(
             else:
                 graph.invoke(Command(resume=resume), config)
     except Exception as exc:
+        observe(WORKFLOW_FAILURES, labels={"error_category": type(exc).__name__})
         update_run(
             run_id,
             status="failed",
@@ -85,6 +109,7 @@ def create_run(request: RunCreateRequest, actor: ActorContext, settings: Setting
             correlation_id=str(uuid4()),
             warnings=[],
             errors=[],
+            **current_trace_context(),
         )
         session.add(run)
     initial = {

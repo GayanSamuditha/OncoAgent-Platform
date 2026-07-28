@@ -1,0 +1,10 @@
+apiVersion: 1
+providers:
+  - name: OncoAgent
+    orgId: 1
+    folder: OncoAgent
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /var/lib/grafana/dashboards

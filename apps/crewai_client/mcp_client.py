@@ -9,6 +9,11 @@ from typing import Any, Protocol
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+try:
+    from opentelemetry.propagate import inject
+except ImportError:  # pragma: no cover
+    inject = None  # type: ignore[assignment]
+
 
 @dataclass(frozen=True)
 class MCPCall:
@@ -33,25 +38,31 @@ class MCPGatewayClient:
 
     async def _call_async(self, tool_name: str, arguments: dict[str, Any]) -> MCPCall:
         import httpx
+        from opentelemetry import trace
 
         headers = {
             "x-mcp-client-id": self.client_id,
             "authorization": f"Bearer {self.token}",
             "x-correlation-id": str(uuid.uuid4()),
         }
-        async with httpx.AsyncClient(headers=headers, timeout=30) as http_client:
-            async with streamable_http_client(self.url, http_client=http_client) as (
-                read_stream,
-                write_stream,
-                _,
-            ):
-                async with ClientSession(read_stream, write_stream) as session:
-                    await session.initialize()
-                    result = await session.call_tool(
-                        tool_name,
-                        {"request": arguments},
-                        read_timeout_seconds=timedelta(seconds=30),
-                    )
+        if inject is not None:
+            inject(headers)
+        with trace.get_tracer("oncoagent-crewai").start_as_current_span(
+            "mcp.client.request", attributes={"mcp.tool": tool_name}
+        ):
+            async with httpx.AsyncClient(headers=headers, timeout=30) as http_client:
+                async with streamable_http_client(self.url, http_client=http_client) as (
+                    read_stream,
+                    write_stream,
+                    _,
+                ):
+                    async with ClientSession(read_stream, write_stream) as session:
+                        await session.initialize()
+                        result = await session.call_tool(
+                            tool_name,
+                            {"request": arguments},
+                            read_timeout_seconds=timedelta(seconds=30),
+                        )
                     data: dict[str, Any] = dict(result.structuredContent or {})
                     if result.isError:
                         raise RuntimeError("MCP tool returned a safe error")

@@ -28,6 +28,8 @@ from app.models.ingestion import FhirResource
 from app.models.mcp import MCPRequest
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
 from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
+from app.observability.metrics import prometheus_payload
+from app.observability.telemetry import observability_status
 from app.repositories.ingestion import (
     get_dataset,
     get_ingestion_run,
@@ -744,6 +746,65 @@ def mcp_status(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
     }
     metadata["registered_client_count"] = len(configured_clients(settings))
     return metadata
+
+
+@router.get("/metrics")
+def metrics(settings: Settings = Depends(get_settings)) -> Response:
+    if not settings.prometheus_metrics_enabled:
+        raise HTTPException(status_code=404, detail="metrics disabled")
+    body, media_type = prometheus_payload()
+    return Response(content=body, media_type=media_type)
+
+
+@router.get("/api/v1/observability/status")
+def observability_endpoint(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return observability_status(settings)
+
+
+@router.get("/api/v1/observability/services")
+def observability_services(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return {
+        "services": [
+            {"service": "oncoagent-api", "status": "configured", "transport": "otlp-grpc"},
+            {"service": "oncoagent-mcp", "status": "configured" if settings.mcp_enabled else "disabled", "transport": "streamable-http,stdio"},
+            {"service": "oncoagent-crewai", "status": "configured" if settings.crewai_enabled else "disabled", "transport": "local-worker"},
+            {"service": "oncoagent-web", "status": "configured", "transport": "http"},
+            {"service": "oncoagent-evaluation-worker", "status": "configured", "transport": "local"},
+        ],
+        "collector_endpoint": settings.otel_exporter_otlp_endpoint,
+        "synthetic_data_notice": "Synthetic Synthea data only.",
+        "clinical_validation_notice": "Not clinically validated.",
+    }
+
+
+@router.get("/api/v1/observability/metrics-summary")
+def observability_metrics_summary(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        workflow_count = session.query(WorkflowRun).count()
+        crew_count = session.query(CrewRun).count()
+        mcp_count = session.query(MCPRequest).count()
+    return {
+        "workflow_runs": workflow_count,
+        "crewai_runs": crew_count,
+        "mcp_requests": mcp_count,
+        "metric_endpoint": "/metrics",
+        "labels_are_low_cardinality": True,
+        "synthetic_data_notice": "Synthetic Synthea data only.",
+        "clinical_validation_notice": "Not clinically validated.",
+    }
+
+
+@router.get("/api/v1/observability/configuration")
+def observability_configuration(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return {
+        "enabled": settings.observability_enabled,
+        "service_name": settings.otel_service_name,
+        "trace_sample_ratio": settings.otel_trace_sample_ratio,
+        "metrics_enabled": settings.prometheus_metrics_enabled,
+        "metrics_path": settings.prometheus_metrics_path,
+        "collector_available_is_non_fatal": True,
+        "redaction": {"prompts": True, "raw_fhir": True, "credentials": True, "patient_ids_in_metrics": True},
+    }
 
 
 @router.get("/api/v1/mcp/clients")

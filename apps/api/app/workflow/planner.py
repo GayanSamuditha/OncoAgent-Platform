@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 import httpx
 
 from app.core.config import Settings
+from app.observability.metrics import MODEL_DURATION, MODEL_REQUESTS, observe
+from app.observability.telemetry import span
 from app.workflow.schemas import CohortPlan, Criterion, CriterionType
 
 
@@ -232,12 +234,14 @@ class OllamaQwenPlannerProvider:
             if mode == "no_think_field":
                 request_body.pop("think", None)
             try:
-                with httpx.Client(
-                    base_url=self.base_url,
-                    timeout=httpx.Timeout(self.settings.local_llm_timeout_seconds, connect=5.0),
-                    limits=httpx.Limits(max_connections=2),
-                ) as client:
-                    response = client.post("/api/chat", json=request_body)
+                request_started = time.perf_counter()
+                with span("ollama.generate", self.settings, {"model.name": self.model_name, "model.repair": repair}):
+                    with httpx.Client(
+                        base_url=self.base_url,
+                        timeout=httpx.Timeout(self.settings.local_llm_timeout_seconds, connect=5.0),
+                        limits=httpx.Limits(max_connections=2),
+                    ) as client:
+                        response = client.post("/api/chat", json=request_body)
                 if len(response.content) > self.settings.local_llm_max_response_bytes:
                     raise LocalPlannerError(
                         "malformed_response", "Ollama response exceeded configured size limit"
@@ -247,6 +251,8 @@ class OllamaQwenPlannerProvider:
                         "model_not_installed", f"Ollama model {self.model_name} is not installed"
                     )
                 response.raise_for_status()
+                observe(MODEL_REQUESTS, labels={"model": self.model_name, "status": "success"})
+                observe(MODEL_DURATION, time.perf_counter() - request_started, {"model": self.model_name})
                 return response.json(), mode
             except LocalPlannerError:
                 raise

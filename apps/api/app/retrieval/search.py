@@ -10,6 +10,13 @@ from app.models.retrieval import (
     ClinicalEmbedding,
     IndexingRun,
 )
+from app.observability.metrics import (
+    RETRIEVAL_DURATION,
+    RETRIEVAL_REQUESTS,
+    RETRIEVAL_ZERO_RESULTS,
+    observe,
+)
+from app.observability.telemetry import span
 from app.retrieval.embeddings import DenseRetrievalProvider
 
 
@@ -24,7 +31,9 @@ def search(
     minimum_score: float | None,
 ) -> tuple[list[dict[str, object]], float]:
     started = time.perf_counter()
-    vector = provider.encode_queries([query])[0]
+    provider_id = provider.metadata.provider_id
+    with span("retrieval.search", attributes={"retrieval.provider": provider.metadata.provider_id, "retrieval.top_k": top_k}):
+        vector = provider.encode_queries([query])[0]
     distance = ClinicalEmbedding.embedding.cosine_distance(vector).label("distance")
     statement = (
         select(ClinicalEmbedding, ClinicalDocument, ClinicalDocumentChunk, distance)
@@ -66,7 +75,12 @@ def search(
                 "chunking_version": embedding.chunking_version,
             }
         )
-    return rows, (time.perf_counter() - started) * 1000
+    duration = time.perf_counter() - started
+    observe(RETRIEVAL_DURATION, duration, {"provider": provider_id})
+    observe(RETRIEVAL_REQUESTS, labels={"provider": provider_id, "status": "success"})
+    if not rows:
+        observe(RETRIEVAL_ZERO_RESULTS, labels={"provider": provider_id})
+    return rows, duration * 1000
 
 
 def last_indexing(session: Session, model_name: str) -> IndexingRun | None:
@@ -121,7 +135,12 @@ def postgres_fts_search(
         }
         for index, (doc, score) in enumerate(session.execute(statement), 1)
     ]
-    return rows, (time.perf_counter() - started) * 1000
+    duration = time.perf_counter() - started
+    observe(RETRIEVAL_DURATION, duration, {"provider": "postgres_fts"})
+    observe(RETRIEVAL_REQUESTS, labels={"provider": "postgres_fts", "status": "success"})
+    if not rows:
+        observe(RETRIEVAL_ZERO_RESULTS, labels={"provider": "postgres_fts"})
+    return rows, duration * 1000
 
 
 def reciprocal_rank_fusion(

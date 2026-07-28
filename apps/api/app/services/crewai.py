@@ -1,9 +1,15 @@
 """Persistence and bounded execution for the downstream CrewAI application."""
 
+import os
 from datetime import UTC, datetime
 from multiprocessing import Process
 from typing import Any
 from uuid import uuid4
+
+# CrewAI's optional vendor telemetry is disabled; Phase 5A uses the platform
+# exporter and redacted application spans instead.
+os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
+os.environ.setdefault("CREWAI_DISABLE_TRACKING", "true")
 
 from crewai_client.mcp_client import MCPGatewayClient
 from crewai_client.schemas import CrewRunRequest
@@ -19,6 +25,11 @@ from app.models.crewai import (
     CrewRun,
     CrewTask,
 )
+from app.observability.metrics import (
+    CREW_RUNS,
+    observe,
+)
+from app.observability.telemetry import current_trace_context, span
 
 _active_run: str | None = None
 _worker_process: Process | None = None
@@ -41,6 +52,7 @@ def _event(
     payload: dict[str, Any],
     task_name: str | None = None,
 ) -> None:
+    trace_context = current_trace_context()
     session.add(
         CrewEvent(
             id=str(uuid4()),
@@ -48,6 +60,8 @@ def _event(
             event_type=event_type,
             task_name=task_name,
             payload=payload,
+            trace_id=trace_context["trace_id"],
+            span_id=trace_context["span_id"],
         )
     )
 
@@ -98,6 +112,7 @@ def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
                 "model_profile": request.model_profile,
             },
             idempotency_key=request.idempotency_key,
+            **current_trace_context(),
         )
         session.add(run)
         session.flush()
@@ -165,6 +180,11 @@ def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
 
 def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
     global _active_run
+    with span("crew.run", settings, {"crew.run_id": run_id, "crew.process": "sequential"}):
+        _execute_inner(run_id, request, settings)
+
+
+def _execute_inner(run_id: str, request: CrewRunRequest, settings: Any) -> None:
     started = datetime.now(UTC)
     with SessionLocal.begin() as session:
         run = session.get(CrewRun, run_id)
@@ -209,6 +229,34 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
             if run:
                 run.status = "running"
         brief = service.run(request, run_id)
+        # CrewAI does not expose its internal task callbacks as a stable
+        # public API. Emit bounded lifecycle spans around the validated task
+        # handoff so operations can traverse agent/task execution without
+        # exporting scratchpads or task prose.
+        for task_name, role in (
+            ("candidate_discovery", "Cohort Researcher"),
+            ("structured_evidence_collection", "Structured Evidence Investigator"),
+            ("eligibility_evidence_review", "Eligibility Evidence Reviewer"),
+            ("research_brief_generation", "Research Brief Writer"),
+        ):
+            with span(
+                "crew.task",
+                settings,
+                {
+                    "crew.task": task_name,
+                    "crew.agent_role": role,
+                    "crew.task.status": "completed",
+                },
+            ):
+                task_context = current_trace_context()
+                with SessionLocal.begin() as task_session:
+                    task_row = task_session.query(CrewTask).filter(
+                        CrewTask.crew_run_id == run_id,
+                        CrewTask.task_name == task_name,
+                    ).first()
+                    if task_row:
+                        task_row.trace_id = task_context["trace_id"]
+                        task_row.span_id = task_context["span_id"]
         now = datetime.now(UTC)
         with SessionLocal.begin() as session:
             run = session.get(CrewRun, run_id)
@@ -331,6 +379,7 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
         # it, so terminal status is always rechecked from PostgreSQL on the
         # next submission.
         _active_run = None
+        observe(CREW_RUNS, labels={"status": "completed"})
 
 
 def cancel_run(run_id: str, actor_id: str) -> CrewRun | None:

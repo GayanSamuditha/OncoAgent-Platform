@@ -156,6 +156,19 @@ class Settings(BaseSettings):
     crewai_mcp_token: str = Field(default="", validation_alias="CREWAI_MCP_TOKEN")
     crewai_mcp_dataset_ids: str = Field(default="", validation_alias="CREWAI_MCP_DATASET_IDS")
     crewai_concurrency: int = Field(default=1, ge=1, le=1, validation_alias="CREWAI_CONCURRENCY")
+    observability_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_ENABLED")
+    otel_service_name: str = Field(default="oncoagent-api", validation_alias="OTEL_SERVICE_NAME")
+    otel_exporter_otlp_endpoint: str = Field(
+        default="http://127.0.0.1:4317", validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
+    )
+    otel_exporter_otlp_protocol: str = Field(default="grpc", validation_alias="OTEL_EXPORTER_OTLP_PROTOCOL")
+    otel_traces_exporter: str = Field(default="otlp", validation_alias="OTEL_TRACES_EXPORTER")
+    otel_metrics_exporter: str = Field(default="otlp", validation_alias="OTEL_METRICS_EXPORTER")
+    otel_log_level: str = Field(default="INFO", validation_alias="OTEL_LOG_LEVEL")
+    otel_trace_sample_ratio: float = Field(default=1.0, ge=0, le=1, validation_alias="OTEL_TRACE_SAMPLE_RATIO")
+    prometheus_metrics_enabled: bool = Field(default=True, validation_alias="PROMETHEUS_METRICS_ENABLED")
+    prometheus_metrics_path: str = Field(default="/metrics", validation_alias="PROMETHEUS_METRICS_PATH")
+    structured_logging_enabled: bool = Field(default=True, validation_alias="STRUCTURED_LOGGING_ENABLED")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore", populate_by_name=True

@@ -17,6 +17,7 @@ from app.models.workflow import (
     WorkflowStep,
     WorkflowToolCall,
 )
+from app.observability.telemetry import current_trace_context
 from app.workflow.policy import validate_transition
 
 
@@ -31,6 +32,7 @@ def event(
     node_name: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> None:
+    trace_context = current_trace_context()
     with SessionLocal.begin() as session:
         session.add(
             WorkflowEvent(
@@ -40,6 +42,8 @@ def event(
                 event_type=event_type,
                 node_name=node_name,
                 payload=payload or {},
+                trace_id=trace_context["trace_id"],
+                span_id=trace_context["span_id"],
             )
         )
 

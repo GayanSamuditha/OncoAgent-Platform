@@ -1,0 +1,14 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type":"timeseries","title":"Workflow outcomes","targets":[{"expr":"sum by (status) (rate(oncoagent_workflow_runs_total[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"CrewAI outcomes","targets":[{"expr":"sum by (status) (rate(oncoagent_crew_runs_total[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"MCP calls by tool","targets":[{"expr":"sum by (tool) (rate(oncoagent_mcp_tool_calls_total[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"Model duration","targets":[{"expr":"sum by (model) (rate(oncoagent_model_request_duration_seconds_sum[5m]))","refId":"A"}]}
+  ],
+  "schemaVersion": 39,
+  "title": "OncoAgent Operations",
+  "uid": "oncoagent-operations",
+  "version": 1
+}

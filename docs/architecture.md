@@ -54,6 +54,16 @@ The planned vertical slice adds a bounded Synthea importer, normalized FHIR fact
 
 Deferred integrations include Temporal, Ray, Kubernetes, Helm, and controlled release mechanisms. CrewAI is implemented only as a bounded downstream MCP client; it is not a control plane.
 
+## Phase 5A observability
+
+The local observability path is `API/workers → OTLP → OpenTelemetry Collector
+→ Tempo and Prometheus → Grafana`. FastAPI, LangGraph service boundaries,
+CrewAI runs, MCP calls, retrieval/model boundaries, and safe database service
+operations use low-cardinality spans and metrics. Trace IDs may be persisted
+alongside workflow, CrewAI, and MCP audit rows for correlation. Telemetry is
+best-effort and redacted; it does not replace append-only audit records or
+structured FHIR verification.
+
 ## Implemented versus planned
 
 | Capability | Phase 0 status |
