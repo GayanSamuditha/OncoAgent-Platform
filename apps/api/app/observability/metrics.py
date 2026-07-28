@@ -62,6 +62,10 @@ DATABASE_ERRORS = _counter("oncoagent_database_errors_total", "Database errors",
 RETRIEVAL_REQUESTS = _counter("oncoagent_retrieval_requests_total", "Retrieval requests", ("provider", "status"))
 RETRIEVAL_DURATION = _histogram("oncoagent_retrieval_request_duration_seconds", "Retrieval duration", ("provider",))
 RETRIEVAL_ZERO_RESULTS = _counter("oncoagent_retrieval_zero_results_total", "Retrieval zero-result requests", ("provider",))
+TEMPORAL_WORKFLOWS = _counter("oncoagent_temporal_workflows_total", "Temporal workflow outcomes", ("status",))
+TEMPORAL_ACTIVITIES = _counter("oncoagent_temporal_activities_total", "Temporal Activity outcomes", ("activity", "status"))
+TEMPORAL_RETRIES = _counter("oncoagent_temporal_activity_retries_total", "Temporal Activity retries", ("activity",))
+TEMPORAL_REVIEW_WAITS = _gauge("oncoagent_temporal_workflows_waiting_for_review", "Temporal workflows waiting for review")
 
 
 def observe(metric: Any, value: float = 1.0, labels: dict[str, str] | None = None) -> None:

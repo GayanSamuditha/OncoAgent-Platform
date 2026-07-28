@@ -26,6 +26,7 @@ dependencies = [
   "opentelemetry-exporter-otlp-proto-grpc>=1.42,<2",
   "opentelemetry-instrumentation-fastapi==0.63b1",
   "prometheus-client>=0.21,<1",
+  "temporalio==1.30.0",
   "uvicorn[standard]>=0.32,<1",
 ]
 
@@ -66,6 +67,7 @@ ignore = ["B008"]
 "app/api/routes.py" = ["E501", "E701"]
 "app/services/crewai.py" = ["E501", "E701", "E702"]
 "app/observability/*.py" = ["E501"]
+"app/temporal/*.py" = ["E501"]
 "app/main.py" = ["E501"]
 
 [tool.mypy]

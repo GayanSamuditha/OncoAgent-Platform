@@ -44,6 +44,11 @@ application audit rows persist nullable trace and span IDs through migration
 0010. Retrieval and model integrations expose safe provider, duration, status,
 fallback, and token-count dimensions only where available.
 
+Temporal-managed CrewAI runs additionally correlate the application run ID,
+Temporal workflow/run IDs, Activity stage, attempt, heartbeat, MCP request IDs,
+and review ID. Temporal workflow replay must not emit duplicate application
+audit events; side effects are confined to Activities and remain idempotent.
+
 Development alert rules cover API errors, workflow failures, orphan MCP
 requests, and governance-gate failures. They are not production SLOs and no
 external notification service is configured.

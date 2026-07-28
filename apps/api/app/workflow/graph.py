@@ -1,7 +1,7 @@
 """The Phase 3A persistent, approval-gated LangGraph workflow."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
@@ -816,7 +816,7 @@ def _observed_node(name: str, function: Any) -> Any:
             get_settings(),
             {"workflow.node": name, "workflow.run_id": state.get("run_id", "")},
         ):
-            return function(state)
+            return cast(dict[str, Any], function(state))
     wrapped.__name__ = name
     return wrapped
 

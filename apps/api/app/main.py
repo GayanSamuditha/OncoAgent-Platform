@@ -1,7 +1,7 @@
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import FastAPI, Request
@@ -65,7 +65,7 @@ def create_app() -> FastAPI:
             if response.status_code >= 500:
                 observe(HTTP_ERRORS, labels={"service": settings.otel_service_name, "route": route, "error_category": "server_error"})
             response.headers.setdefault("X-Trace-Id", trace_id or "")
-            return response
+            return cast(Response, response)
         except Exception:
             observe(HTTP_ERRORS, labels={"service": settings.otel_service_name, "route": route, "error_category": "unhandled"})
             raise

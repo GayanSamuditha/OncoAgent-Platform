@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -156,6 +157,23 @@ class Settings(BaseSettings):
     crewai_mcp_token: str = Field(default="", validation_alias="CREWAI_MCP_TOKEN")
     crewai_mcp_dataset_ids: str = Field(default="", validation_alias="CREWAI_MCP_DATASET_IDS")
     crewai_concurrency: int = Field(default=1, ge=1, le=1, validation_alias="CREWAI_CONCURRENCY")
+    crewai_execution_mode: Literal["temporal", "legacy"] = Field(
+        default="temporal", validation_alias="CREWAI_EXECUTION_MODE"
+    )
+    temporal_enabled: bool = Field(default=True, validation_alias="TEMPORAL_ENABLED")
+    temporal_address: str = Field(default="127.0.0.1:7233", validation_alias="TEMPORAL_ADDRESS")
+    temporal_namespace: str = Field(default="oncoagent", validation_alias="TEMPORAL_NAMESPACE")
+    temporal_task_queue: str = Field(default="oncoagent-crewai", validation_alias="TEMPORAL_TASK_QUEUE")
+    temporal_ui_url: str = Field(default="http://127.0.0.1:8233", validation_alias="TEMPORAL_UI_URL")
+    temporal_workflow_execution_timeout_seconds: int = Field(default=1800, ge=60, le=86400, validation_alias="TEMPORAL_WORKFLOW_EXECUTION_TIMEOUT_SECONDS")
+    temporal_activity_start_to_close_seconds: int = Field(default=300, ge=10, le=3600, validation_alias="TEMPORAL_ACTIVITY_START_TO_CLOSE_SECONDS")
+    temporal_activity_schedule_to_close_seconds: int = Field(default=900, ge=30, le=7200, validation_alias="TEMPORAL_ACTIVITY_SCHEDULE_TO_CLOSE_SECONDS")
+    temporal_activity_heartbeat_seconds: int = Field(default=30, ge=5, le=300, validation_alias="TEMPORAL_ACTIVITY_HEARTBEAT_SECONDS")
+    temporal_max_activity_attempts: int = Field(default=2, ge=1, le=5, validation_alias="TEMPORAL_MAX_ACTIVITY_ATTEMPTS")
+    temporal_dev_fault_stage: str = Field(default="", validation_alias="TEMPORAL_DEV_FAULT_STAGE")
+    temporal_dev_fault_category: str = Field(default="", validation_alias="TEMPORAL_DEV_FAULT_CATEGORY")
+    temporal_dev_fault_attempts: int = Field(default=1, ge=1, le=2, validation_alias="TEMPORAL_DEV_FAULT_ATTEMPTS")
+    temporal_dev_activity_delay_seconds: float = Field(default=0, ge=0, le=120, validation_alias="TEMPORAL_DEV_ACTIVITY_DELAY_SECONDS")
     observability_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_ENABLED")
     otel_service_name: str = Field(default="oncoagent-api", validation_alias="OTEL_SERVICE_NAME")
     otel_exporter_otlp_endpoint: str = Field(

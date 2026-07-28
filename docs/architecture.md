@@ -151,3 +151,35 @@ is validated against MCP request lineage and its lifecycle is checked for
 ordered start/completion/review events. A framework-specific scorecard
 reports independent gates and limitations; it does not declare a universal
 winner.
+
+## Phase 5B Temporal durable execution
+
+Temporal coordinates only the downstream CrewAI lifecycle. LangGraph keeps its
+PostgreSQL checkpoint topology, while MCP remains the sole governed clinical
+access boundary. Temporal Activities call the existing CrewAI and MCP-backed
+services; deterministic workflow code performs no database, network, model,
+filesystem, or audit side effects.
+
+```mermaid
+sequenceDiagram
+    participant API as FastAPI
+    participant T as Temporal workflow
+    participant W as Activity worker
+    participant C as CrewAI
+    participant M as MCP gateway
+    participant DB as PostgreSQL audit
+    API->>T: start workflow crewai:{run_id}
+    T->>W: validate and execute Activities
+    W->>C: unchanged sequential four-agent crew
+    C->>M: authorized read-only clinical tools
+    M->>DB: MCP audit and lineage
+    W->>DB: CrewAI output and review record
+    T-->>API: durable waiting_for_human_review
+    API->>T: reviewer signal
+    T->>W: apply decision and finalize
+```
+
+Temporal retries are bounded and typed. Safety, authorization, dataset, and
+governance failures are non-retryable. Recovery is from the last completed
+Activity boundary or safe heartbeat, not from a model token position. Legacy
+CrewAI execution remains available only with the explicit `legacy` mode.
