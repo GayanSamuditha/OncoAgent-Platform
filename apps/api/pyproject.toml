@@ -68,6 +68,8 @@ ignore = ["B008"]
 "app/services/crewai.py" = ["E501", "E701", "E702"]
 "app/observability/*.py" = ["E501"]
 "app/temporal/*.py" = ["E501"]
+"app/resilience/*.py" = ["E501"]
+"../../scripts/*.py" = ["E501"]
 "app/main.py" = ["E501"]
 
 [tool.mypy]

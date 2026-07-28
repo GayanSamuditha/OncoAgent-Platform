@@ -5,7 +5,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ApplicationError
+from temporalio.exceptions import ActivityError, ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from app.temporal.contracts import (
@@ -91,6 +91,21 @@ class CrewResearchWorkflow:
                     start_to_close_timeout=timedelta(seconds=60), retry_policy=retry_policy,
                 )
             return {"run_id": data.run_id, "review_id": review_id, "status": applied, "brief": brief}
+        except ActivityError as exc:
+            cause = exc.cause
+            if isinstance(cause, ApplicationError) and cause.type == "activity_cancelled":
+                await workflow.execute_activity(
+                    "persist_cancellation_activity", data.run_id,
+                    start_to_close_timeout=timedelta(seconds=60),
+                    retry_policy=RetryPolicy(maximum_attempts=1),
+                )
+                return {"run_id": data.run_id, "status": "cancelled"}
+            await workflow.execute_activity(
+                "persist_failure_activity", args=[data.run_id, "activity_worker_failure", "Temporal Activity failed safely"],
+                start_to_close_timeout=timedelta(seconds=60),
+                retry_policy=RetryPolicy(maximum_attempts=1),
+            )
+            raise
         except ApplicationError as exc:
             if exc.type == "activity_cancelled":
                 await workflow.execute_activity(

@@ -39,6 +39,8 @@ from app.repositories.ingestion import (
     list_patients,
     patient_count,
 )
+from app.resilience.registry import SCENARIO_REGISTRY_VERSION, resilience_scenarios
+from app.resilience.reports import load_reports
 from app.retrieval.model_registry import get_reranker, provider_for
 from app.retrieval.search import hybrid_search, last_indexing, postgres_fts_search, search
 from app.schemas.ingestion import (
@@ -936,6 +938,41 @@ def observability_configuration(settings: Settings = Depends(get_settings)) -> d
         "metrics_path": settings.prometheus_metrics_path,
         "collector_available_is_non_fatal": True,
         "redaction": {"prompts": True, "raw_fhir": True, "credentials": True, "patient_ids_in_metrics": True},
+    }
+
+
+@router.get("/api/v1/resilience/scenarios")
+def resilience_scenario_catalog(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    return {
+        "registry_version": SCENARIO_REGISTRY_VERSION,
+        "items": [item.model_dump() for item in resilience_scenarios()],
+        "synthetic_data_notice": "Synthetic Synthea data only.",
+        "clinical_validation_notice": "Not clinically validated.",
+    }
+
+
+@router.get("/api/v1/resilience/certifications")
+def resilience_certifications(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    reports = load_reports()
+    return {"items": reports, "count": len(reports), "registry_version": SCENARIO_REGISTRY_VERSION}
+
+
+@router.get("/api/v1/resilience/certifications/{certification_id}")
+def resilience_certification(certification_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    for report in load_reports():
+        if report.get("certification_id") == certification_id:
+            return report
+    raise HTTPException(status_code=404, detail="resilience certification not found")
+
+
+@router.get("/api/v1/resilience/readiness")
+def resilience_readiness(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    return {
+        "ready": settings.temporal_enabled and settings.crewai_execution_mode == "temporal",
+        "execution_mode": settings.crewai_execution_mode,
+        "fault_injection_enabled_by_default": False,
+        "registry_version": SCENARIO_REGISTRY_VERSION,
+        "limitations": ["Certification is local synthetic development validation."],
     }
 
 
