@@ -254,6 +254,9 @@ huggingface_cache/
 transformers_cache/
 torch_cache/
 *.tsbuildinfo
+observability-data/
+infra/observability/data/
+*.log
 apps/crewai_client/.crewai/
 crewai_outputs/
 evaluations/crewai/outputs/

@@ -1,0 +1,15 @@
+groups:
+  - name: oncoagent-development
+    rules:
+      - alert: OncoAgentApiErrors
+        expr: rate(oncoagent_http_errors_total[5m]) > 0.1
+        for: 5m
+      - alert: OncoAgentWorkflowFailures
+        expr: rate(oncoagent_workflow_failures_total[5m]) > 0
+        for: 5m
+      - alert: OncoAgentOrphanMcpRequests
+        expr: oncoagent_orphan_mcp_requests > 0
+        for: 1m
+      - alert: OncoAgentGovernanceGateFailure
+        expr: oncoagent_governance_gate_status == 0
+        for: 1m

@@ -1,5 +1,6 @@
 """Allowlisted, read-only workflow tools over normalized Phase 1 data."""
 
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
@@ -17,6 +18,8 @@ from app.models.ingestion import (
     Patient,
     Procedure,
 )
+from app.observability.metrics import DATABASE_DURATION, DATABASE_ERRORS, observe
+from app.observability.telemetry import span
 from app.retrieval.model_registry import provider_for
 from app.retrieval.search import postgres_fts_search, search
 from app.workflow.schemas import ToolDescriptor
@@ -314,4 +317,16 @@ def execute_tool(
     if context.actor_role not in registered.descriptor.allowed_roles:
         raise ToolExecutionError("authorization", "Actor role is not allowed for this tool")
     validated = registered.request_model.model_validate(arguments)
-    return registered.handler(context, validated)
+    started = time.perf_counter()
+    try:
+        with span(
+            "database.repository.read",
+            context.settings,
+            {"tool.name": name, "tool.read_only": True},
+        ):
+            return registered.handler(context, validated)
+    except Exception:
+        observe(DATABASE_ERRORS, labels={"operation": "repository.read"})
+        raise
+    finally:
+        observe(DATABASE_DURATION, time.perf_counter() - started, {"operation": "repository.read"})

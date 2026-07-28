@@ -10,5 +10,7 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
 def get_db() -> Generator[Session, None, None]:
+    # Do not hold an OpenTelemetry context manager across the dependency
+    # generator yield. FastAPI may resume cleanup in a different task/context.
     with SessionLocal() as session:
         yield session

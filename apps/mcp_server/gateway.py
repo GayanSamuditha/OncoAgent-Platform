@@ -6,10 +6,28 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+try:
+    from opentelemetry import context as otel_context
+    from opentelemetry.propagate import extract as extract_trace_context
+except ImportError:  # pragma: no cover - optional observability boundary
+    otel_context = None  # type: ignore[assignment]
+    extract_trace_context = None  # type: ignore[assignment]
+
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.models.ingestion import Dataset
 from app.models.mcp import MCPRequest
+from app.observability.metrics import (
+    MCP_AUTH_FAILURES,
+    MCP_DATASET_DENIALS,
+    MCP_DURATION,
+    MCP_ERRORS,
+    MCP_FALLBACKS,
+    MCP_REQUESTS,
+    MCP_TOOL_CALLS,
+    observe,
+)
+from app.observability.telemetry import current_trace_context, span
 from app.retrieval.model_registry import provider_for
 from app.retrieval.search import postgres_fts_search, search
 from app.workflow.tools import (
@@ -95,8 +113,9 @@ class MCPGateway:
         return {key: value for key, value in result.items() if key not in {"token", "authorization", "headers"}}
 
     def _audit(self, request_id: str, identity: MCPClientIdentity, tool_name: str, arguments: dict[str, Any], dataset_id: str | None, status: str, started: datetime, latency_ms: float, result_count: int, response_size: int, error_category: str | None = None, fallback_reason: str | None = None, retrieval_lineage: dict[str, Any] | None = None) -> None:
+        trace_context = current_trace_context()
         with SessionLocal.begin() as session:
-            session.add(MCPRequest(id=request_id, protocol_version=MCP_PROTOCOL_VERSION, server_version=self.settings.app_version, client_id=identity.client_id, actor_id=identity.actor_id, actor_role=identity.actor_role, client_type=identity.client_type, correlation_id=str(uuid4()), tool_name=tool_name, tool_version=TOOL_VERSION, dataset_id=dataset_id, sanitized_arguments=self._safe_args(arguments), status=status, result_count=result_count, response_size_bytes=response_size, latency_ms=latency_ms, error_category=error_category, fallback_reason=fallback_reason, retrieval_lineage=retrieval_lineage or {}, started_at=started, completed_at=datetime.now(UTC)))
+            session.add(MCPRequest(id=request_id, protocol_version=MCP_PROTOCOL_VERSION, server_version=self.settings.app_version, client_id=identity.client_id, actor_id=identity.actor_id, actor_role=identity.actor_role, client_type=identity.client_type, correlation_id=str(uuid4()), tool_name=tool_name, tool_version=TOOL_VERSION, dataset_id=dataset_id, sanitized_arguments=self._safe_args(arguments), status=status, result_count=result_count, response_size_bytes=response_size, latency_ms=latency_ms, error_category=error_category, fallback_reason=fallback_reason, retrieval_lineage=retrieval_lineage or {}, started_at=started, completed_at=datetime.now(UTC), trace_id=trace_context["trace_id"], span_id=trace_context["span_id"]))
 
     def _search(self, identity: MCPClientIdentity, request: MCPSearchRequest) -> tuple[dict[str, Any], dict[str, Any]]:
         if request.retrieval_profile not in ALLOWED_PROFILES:
@@ -126,17 +145,36 @@ class MCPGateway:
         raise RuntimeError("all retrieval providers are unavailable")
 
     def execute(self, tool_name: str, arguments: dict[str, Any], context: Context[Any, Any, Any] | None = None, stdio: bool = False) -> dict[str, Any]:
+        """Execute a tool under the caller's W3C trace context.
+
+        The attach/detach pair is scoped to this synchronous tool callback,
+        not to the surrounding ASGI request task. This preserves propagation
+        without crossing Starlette/AnyIO task boundaries.
+        """
+        token = None
+        if otel_context is not None and extract_trace_context is not None:
+            token = otel_context.attach(extract_trace_context(_headers_from_context(context)))
+        try:
+            return self._execute(tool_name, arguments, context, stdio)
+        finally:
+            if token is not None:
+                otel_context.detach(token)
+
+    def _execute(self, tool_name: str, arguments: dict[str, Any], context: Context[Any, Any, Any] | None = None, stdio: bool = False) -> dict[str, Any]:
         request_id = str(uuid4())
         started_at = datetime.now(UTC)
         started = time.perf_counter()
         identity: MCPClientIdentity | None = None
         dataset_id = arguments.get("dataset_id") if isinstance(arguments.get("dataset_id"), str) else None
-        try:
-            identity = self._identity(context, stdio=stdio or self._stdio_mode)
+        with span("mcp.tool.call", self.settings, {"mcp.tool": tool_name, "mcp.transport": "stdio" if stdio else "streamable-http"}):
+          try:
+            with span("mcp.authentication", self.settings, {"mcp.status": "checked"}):
+                identity = self._identity(context, stdio=stdio or self._stdio_mode)
             if tool_name not in self.registry:
                 raise MCPAuthError("unknown_tool", "tool is not registered")
-            if identity.actor_role not in self.registry[tool_name].descriptor.allowed_roles:
-                raise MCPAuthError("authorization_denied", "actor role is not allowed for this tool")
+            with span("mcp.authorization", self.settings, {"mcp.status": "checked"}):
+                if identity.actor_role not in self.registry[tool_name].descriptor.allowed_roles:
+                    raise MCPAuthError("authorization_denied", "actor role is not allowed for this tool")
             request: Any = None
             validated_request: Any = None
             if tool_name == "search_clinical_documents":
@@ -152,7 +190,8 @@ class MCPGateway:
                 validated_request = request
                 dataset_id = request.dataset_id
             if dataset_id:
-                self._dataset(identity, dataset_id)
+                with span("mcp.dataset.policy", self.settings, {"mcp.status": "checked"}):
+                    self._dataset(identity, dataset_id)
             if tool_name == "search_clinical_documents":
                 request = MCPSearchRequest.model_validate(validated_request.model_dump())
                 result, lineage = self._search(identity, request)
@@ -169,33 +208,46 @@ class MCPGateway:
             if tool_name == "build_patient_evidence":
                 result = {"status": "structured_facts_available", "patient_id": arguments.get("patient_id"), "dataset_id": dataset_id, "facts": result, "evidence_notice": "Facts are not cohort inclusion decisions; structured verification and human approval remain required."}
             response = {**result, "tool_name": tool_name, "tool_version": TOOL_VERSION, "correlation_id": request_id, "synthetic_data_notice": "Synthetic Synthea data only.", "clinical_validation_notice": "Not clinically validated."}
-            encoded = json.dumps(response, default=str).encode()
+            with span("mcp.result.validation", self.settings, {"mcp.status": "validated"}):
+                encoded = json.dumps(response, default=str).encode()
             if len(encoded) > self.settings.mcp_max_response_bytes:
                 raise MCPAuthError("result_limit_exceeded", "MCP response exceeded the configured size limit")
             result_count = len(result.get("items", [])) if isinstance(result.get("items"), list) else 1
             self._audit(request_id, identity, tool_name, arguments, dataset_id, "success", started_at, (time.perf_counter() - started) * 1000, result_count, len(encoded), retrieval_lineage=lineage)
+            observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "success", "transport": "stdio" if stdio else "streamable-http"})
+            observe(MCP_TOOL_CALLS, labels={"tool": tool_name})
+            observe(MCP_DURATION, (time.perf_counter() - started), {"tool": tool_name})
+            if lineage.get("fallbacks"):
+                for item in lineage["fallbacks"]:
+                    observe(MCP_FALLBACKS, labels={"provider": str(item.get("to", "unknown"))})
             return response
-        except ValidationError:
+          except ValidationError:
             error = _error("invalid_arguments", "tool arguments did not satisfy the registered schema")
             category = "invalid_arguments"
-        except MCPAuthError as exc:
+          except MCPAuthError as exc:
             error = _error(exc.category, str(exc))
             category = exc.category
-        except TimeoutError:
+          except TimeoutError:
             error = _error("timeout", "tool execution timed out", True)
             category = "timeout"
-        except RuntimeError as exc:
+          except RuntimeError as exc:
             error = _error("provider_unavailable", str(exc), True)
             category = "provider_unavailable"
-        except (ValueError, OSError):
+          except (ValueError, OSError):
             error = _error("structured_data_unavailable", "structured synthetic data could not be read", True)
             category = "structured_data_unavailable"
-        except Exception:  # noqa: BLE001  # pragma: no cover - safe transport boundary
+          except Exception:  # noqa: BLE001  # pragma: no cover - safe transport boundary
             error = _error("internal_safe_failure", "MCP tool execution failed safely")
             category = "internal_safe_failure"
-        if identity is not None:
-            self._audit(request_id, identity, tool_name, arguments, dataset_id, "error", started_at, (time.perf_counter() - started) * 1000, 0, len(json.dumps(error)), error_category=category)
-        return {**error, "tool_name": tool_name, "tool_version": TOOL_VERSION, "correlation_id": request_id}
+          if identity is not None:
+              self._audit(request_id, identity, tool_name, arguments, dataset_id, "error", started_at, (time.perf_counter() - started) * 1000, 0, len(json.dumps(error)), error_category=category)
+          observe(MCP_ERRORS, labels={"tool": tool_name, "error_category": category})
+          if category in {"authentication_failed", "unknown_client"}:
+              observe(MCP_AUTH_FAILURES)
+          if category == "dataset_not_allowed":
+              observe(MCP_DATASET_DENIALS)
+          observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "error", "transport": "stdio" if stdio else "streamable-http"})
+          return {**error, "tool_name": tool_name, "tool_version": TOOL_VERSION, "correlation_id": request_id}
 
     def _register_tools(self) -> None:
         @self.server.tool(name="search_clinical_documents", description="Search bounded synthetic clinical documents using the allowlisted retrieval policy.", structured_output=True)

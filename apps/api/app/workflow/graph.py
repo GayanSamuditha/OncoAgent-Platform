@@ -12,6 +12,7 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.ingestion import Dataset
 from app.models.workflow import ApprovalDecision, ApprovalRequest
+from app.observability.telemetry import span
 from app.retrieval.model_registry import provider_for
 from app.retrieval.search import postgres_fts_search, search
 from app.workflow.audit import (
@@ -807,6 +808,19 @@ def _after_approval(state: WorkflowState) -> str:
     }.get(str(decision), "fail_safely")
 
 
+def _observed_node(name: str, function: Any) -> Any:
+    """Create a bounded node span without changing graph state or topology."""
+    def wrapped(state: WorkflowState) -> dict[str, Any]:
+        with span(
+            f"workflow.node.{name}",
+            get_settings(),
+            {"workflow.node": name, "workflow.run_id": state.get("run_id", "")},
+        ):
+            return function(state)
+    wrapped.__name__ = name
+    return wrapped
+
+
 def build_graph(checkpointer: BaseCheckpointSaver[str]) -> Any:
     graph = StateGraph(WorkflowState)
     for name, function in (
@@ -826,7 +840,7 @@ def build_graph(checkpointer: BaseCheckpointSaver[str]) -> Any:
         ("fail_safely", fail_safely),
         ("record_completion", record_completion),
     ):
-        graph.add_node(name, function)
+        graph.add_node(name, _observed_node(name, function))
     graph.add_edge(START, "intake")
     graph.add_conditional_edges("intake", _after_intake)
     graph.add_conditional_edges("create_plan", _after_create)
