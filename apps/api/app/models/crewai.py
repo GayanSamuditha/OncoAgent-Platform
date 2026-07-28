@@ -126,6 +126,7 @@ class CrewLineage(Base):
     mcp_protocol_version: Mapped[str] = mapped_column(String(40))
     mcp_server_version: Mapped[str] = mapped_column(String(40))
     mcp_request_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    mcp_request_context: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     tool_names: Mapped[list[str]] = mapped_column(JSONB, default=list)
     retrieval_lineage: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     token_usage: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)

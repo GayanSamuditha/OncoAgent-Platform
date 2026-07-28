@@ -170,6 +170,27 @@ def save_candidates(run_id: str, dataset_id: str, candidates: list[dict[str, Any
                 )
 
 
+def update_candidate_verification(
+    run_id: str, verification: list[dict[str, Any]], included_patient_ids: list[str]
+) -> None:
+    """Persist the authoritative structured-verification outcome on candidates."""
+    included = set(included_patient_ids)
+    by_patient = {str(item["patient_id"]): item for item in verification}
+    with SessionLocal.begin() as session:
+        rows = session.scalars(
+            select(WorkflowCandidate).where(WorkflowCandidate.run_id == run_id)
+        ).all()
+        for row in rows:
+            result = by_patient.get(row.patient_id, {})
+            statuses = [str(item.get("status")) for item in result.get("criteria", [])]
+            row.included = row.patient_id in included
+            row.verification_status = (
+                "verified"
+                if row.included
+                else ("missing_data" if "missing_data" in statuses else "not_verified")
+            )
+
+
 def save_evidence(run_id: str, evidence_items: list[dict[str, Any]]) -> None:
     with SessionLocal.begin() as session:
         for item in evidence_items:

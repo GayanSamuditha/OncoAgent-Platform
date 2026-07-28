@@ -171,6 +171,10 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
         if not run:
             return
         run.status, run.started_at, run.current_task = "validating", started, "candidate_discovery"
+        task_rows = session.query(CrewTask).filter(CrewTask.crew_run_id == run_id).all()
+        agent_rows = session.query(CrewAgent).filter(CrewAgent.crew_run_id == run_id).all()
+        task_by_name = {task.task_name: task.id for task in task_rows}
+        agent_by_role = {agent.role: agent.id for agent in agent_rows}
         first_task = session.query(CrewTask).filter(
             CrewTask.crew_run_id == run_id,
             CrewTask.task_name == "candidate_discovery",
@@ -180,13 +184,24 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
         _event(session, run_id, "input_validated", {"process": "sequential"})
         _event(session, run_id, "crew_started", {"process": "sequential"})
         _event(session, run_id, "started", {"process": "sequential"})
-        _event(session, run_id, "candidate_discovery_started", {}, "candidate_discovery")
+        _event(
+            session,
+            run_id,
+            "candidate_discovery_started",
+            {
+                "task_id": task_by_name["candidate_discovery"],
+                "agent_id": agent_by_role["Cohort Researcher"],
+                "dataset_id": run.dataset_id,
+            },
+            "candidate_discovery",
+        )
     try:
         client = MCPGatewayClient(
             settings.crewai_mcp_url,
             settings.crewai_mcp_client_id,
             settings.crewai_mcp_token,
             settings.crewai_max_tool_calls_per_run,
+            run_id,
         )
         service = CrewExecutionService(settings, client)
         with SessionLocal.begin() as session:
@@ -210,13 +225,36 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                         "fallback": "deterministic",
                     },
                 )
-            _event(session, run_id, "candidate_discovery_completed", {}, "candidate_discovery")
-            _event(session, run_id, "evidence_collection_started", {}, "structured_evidence_collection")
-            _event(session, run_id, "evidence_collection_completed", {}, "structured_evidence_collection")
-            _event(session, run_id, "eligibility_review_started", {}, "eligibility_evidence_review")
-            _event(session, run_id, "eligibility_review_completed", {}, "eligibility_evidence_review")
-            _event(session, run_id, "brief_generation_started", {}, "research_brief_generation")
-            _event(session, run_id, "brief_generation_completed", {}, "research_brief_generation")
+            _event(
+                session,
+                run_id,
+                "candidate_discovery_completed",
+                {
+                    "task_id": task_by_name["candidate_discovery"],
+                    "agent_id": agent_by_role["Cohort Researcher"],
+                    "dataset_id": run.dataset_id,
+                },
+                "candidate_discovery",
+            )
+            for event_type, task_name, role in (
+                ("evidence_collection_started", "structured_evidence_collection", "Structured Evidence Investigator"),
+                ("evidence_collection_completed", "structured_evidence_collection", "Structured Evidence Investigator"),
+                ("eligibility_review_started", "eligibility_evidence_review", "Eligibility Evidence Reviewer"),
+                ("eligibility_review_completed", "eligibility_evidence_review", "Eligibility Evidence Reviewer"),
+                ("brief_generation_started", "research_brief_generation", "Research Brief Writer"),
+                ("brief_generation_completed", "research_brief_generation", "Research Brief Writer"),
+            ):
+                _event(
+                    session,
+                    run_id,
+                    event_type,
+                    {
+                        "task_id": task_by_name[task_name],
+                        "agent_id": agent_by_role[role],
+                        "dataset_id": run.dataset_id,
+                    },
+                    task_name,
+                )
             _event(session, run_id, "final_validation_completed", {"valid": True})
             run.status, run.current_task, run.completed_at, run.updated_at = (
                 "awaiting_human_review",
@@ -226,7 +264,9 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
             )
             for task in session.query(CrewTask).filter(CrewTask.crew_run_id == run_id).all():
                 task.status = "completed"
+                task.started_at = task.started_at or started
                 task.completed_at = now
+                task.latency_ms = max(0.0, (now - (task.started_at or started)).total_seconds() * 1000)
             run.output_summary = {
                 "candidate_count": brief.candidate_count,
                 "proposed_included_count": brief.proposed_included_count,
@@ -251,6 +291,7 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                     mcp_protocol_version="2025-06-18",
                     mcp_server_version=settings.app_version,
                     mcp_request_ids=client.request_ids,
+                    mcp_request_context=client.request_context,
                     tool_names=sorted({"search_clinical_documents", "build_patient_evidence"}),
                     retrieval_lineage=brief.retrieval_summary,
                     token_usage={
@@ -266,7 +307,7 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                 "awaiting_human_review",
                 {"mcp_request_count": len(client.request_ids), "review_required": True},
             )
-    except Exception:  # safe boundary; no internals returned
+    except Exception as exc:  # safe boundary; no internals returned
         with SessionLocal.begin() as session:
             run = session.get(CrewRun, run_id)
             if run:
@@ -276,7 +317,15 @@ def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
                     "CrewAI run failed safely",
                     datetime.now(UTC),
                 )
-                _event(session, run_id, "failed", {"error_category": "internal_safe_failure"})
+                _event(
+                    session,
+                    run_id,
+                    "failed",
+                    {
+                        "error_category": "internal_safe_failure",
+                        "error_type": type(exc).__name__,
+                    },
+                )
     finally:
         # The parent process owns the active-run guard. A child cannot mutate
         # it, so terminal status is always rechecked from PostgreSQL on the

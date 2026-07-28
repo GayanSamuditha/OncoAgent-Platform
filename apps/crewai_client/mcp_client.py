@@ -22,10 +22,14 @@ class MCPClientProtocol(Protocol):
 
 
 class MCPGatewayClient:
-    def __init__(self, url: str, client_id: str, token: str, max_calls: int = 30) -> None:
+    def __init__(
+        self, url: str, client_id: str, token: str, max_calls: int = 30, run_id: str | None = None
+    ) -> None:
         self.url, self.client_id, self.token = url, client_id, token
         self.max_calls, self.calls = max_calls, 0
+        self.run_id = run_id
         self.request_ids: list[str] = []
+        self.request_context: list[dict[str, str]] = []
 
     async def _call_async(self, tool_name: str, arguments: dict[str, Any]) -> MCPCall:
         import httpx
@@ -53,6 +57,22 @@ class MCPGatewayClient:
                         raise RuntimeError("MCP tool returned a safe error")
                     request_id = str(data.get("correlation_id", uuid.uuid4()))
                     self.request_ids.append(request_id)
+                    task_name, agent_role = {
+                        "search_clinical_documents": ("candidate_discovery", "Cohort Researcher"),
+                        "build_patient_evidence": ("eligibility_evidence_review", "Eligibility Evidence Reviewer"),
+                    }.get(
+                        tool_name,
+                        ("structured_evidence_collection", "Structured Evidence Investigator"),
+                    )
+                    self.request_context.append(
+                        {
+                            "request_id": request_id,
+                            "run_id": self.run_id or "",
+                            "tool_name": tool_name,
+                            "task_name": task_name,
+                            "agent_role": agent_role,
+                        }
+                    )
                     return MCPCall(result=data, request_id=request_id, tool_name=tool_name)
 
     def call(self, tool_name: str, arguments: dict[str, Any]) -> MCPCall:

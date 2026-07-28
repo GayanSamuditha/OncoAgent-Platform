@@ -37,7 +37,10 @@ class ProvenanceCoverageValidator:
         affected_patients: set[str] = set()
         affected_criteria: set[str] = set()
         valid = 0
-        expected = max(len(required) * max(len(included), 1), len(rows))
+        # Included-patient coverage and overall evidence coverage are separate
+        # metrics. A no-result or clarification run has no included-patient
+        # denominator and is therefore vacuously complete for this metric.
+        expected = len(required) * len(included)
         seen = set()
         for row in rows:
             patient = str(_value(row, "patient_id", ""))
@@ -55,7 +58,9 @@ class ProvenanceCoverageValidator:
                 defects.append(f"evidence patient is not included: {patient}")
             if candidates and patient not in candidates:
                 defects.append(f"evidence patient is not a candidate: {patient}")
-            if status == "verified" and source_id:
+            if status == "verified" and source_id and (
+                not required or criterion in required
+            ) and (not included or patient in included):
                 valid += 1
             elif status == "verified" and not source_id:
                 defects.append(f"verified evidence lacks source resource: {patient}/{criterion}")
@@ -72,7 +77,7 @@ class ProvenanceCoverageValidator:
                     defects.append(f"missing required evidence: {patient}/{criterion}")
                     affected_patients.add(patient)
                     affected_criteria.add(criterion)
-        required_count = max(expected, len(rows), 0)
+        required_count = expected
         return ProvenanceReport(
             required_evidence_count=required_count,
             valid_provenance_count=min(valid, required_count),
