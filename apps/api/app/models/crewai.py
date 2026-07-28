@@ -43,6 +43,20 @@ class CrewRun(Base):
     )
     trace_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     span_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    temporal_workflow_id: Mapped[str | None] = mapped_column(String(200), nullable=True, unique=True, index=True)
+    temporal_run_id: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    temporal_namespace: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    temporal_task_queue: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    temporal_execution_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    temporal_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    temporal_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    temporal_last_heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    temporal_current_stage: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    temporal_activity_attempt: Mapped[int | None] = mapped_column(nullable=True)
+    temporal_failure_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    temporal_failure_message_redacted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    temporal_execution_mode: Mapped[str] = mapped_column(String(30), default="legacy", nullable=False)
+    temporal_correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
 
 
 class CrewAgent(Base):

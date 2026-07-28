@@ -35,6 +35,7 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=2d"]
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/alerts.yml:/etc/prometheus/alerts.yml:ro
       - oncoagent-prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
@@ -78,8 +79,128 @@ services:
         limits:
           memory: 512M
 
+  temporal-postgresql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal_dev}
+    volumes:
+      - oncoagent-temporal-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  temporal:
+    image: temporalio/server:1.31.2
+    restart: unless-stopped
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal_dev}
+      POSTGRES_SEEDS: temporal-postgresql
+      SKIP_SCHEMA_SETUP: "true"
+      SERVICES: frontend,history,matching,worker
+      NUM_HISTORY_SHARDS: 16
+      DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yaml
+      TEMPORAL_ADDRESS: temporal:7233
+    depends_on:
+      temporal-schema-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:7233:7233"
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z $$(hostname -i) 7233"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    volumes:
+      - ./temporal/dynamicconfig:/etc/temporal/config/dynamicconfig:ro
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  temporal-schema-init:
+    image: temporalio/admin-tools:1.31.2
+    restart: "no"
+    environment:
+      TEMPORAL_POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD:-temporal_dev}
+    depends_on:
+      temporal-postgresql:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        sql_tool() {
+          database="$${1}";
+          shift;
+          temporal-sql-tool --plugin postgres12 --ep temporal-postgresql --port 5432 \
+            --user temporal --pw "$${TEMPORAL_POSTGRES_PASSWORD}" --db "$${database}" "$${@}";
+        }
+
+        # Database creation is intentionally tolerant of an existing database.
+        # Schema setup and versioned upgrades remain strict and idempotent.
+        sql_tool temporal create || true
+        sql_tool temporal_visibility create || true
+
+        sql_tool temporal setup-schema -v 0.0
+        sql_tool temporal_visibility setup-schema -v 0.0
+
+        temporal-sql-tool --plugin postgres12 --ep temporal-postgresql --port 5432 \
+          --user temporal --pw "$${TEMPORAL_POSTGRES_PASSWORD}" --db temporal \
+          update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+        temporal-sql-tool --plugin postgres12 --ep temporal-postgresql --port 5432 \
+          --user temporal --pw "$${TEMPORAL_POSTGRES_PASSWORD}" --db temporal_visibility \
+          update-schema -d /etc/temporal/schema/postgresql/v12/visibility/versioned
+
+  temporal-namespace-init:
+    image: temporalio/admin-tools:1.31.2
+    restart: "no"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if temporal operator namespace describe --address temporal:7233 --namespace oncoagent >/dev/null 2>&1; then
+          exit 0
+        fi
+        temporal operator namespace create --address temporal:7233 --namespace oncoagent --retention 1d
+
+  temporal-ui:
+    image: temporalio/ui:2.52.1
+    restart: unless-stopped
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_DEFAULT_NAMESPACE: oncoagent
+      TEMPORAL_DISABLE_WRITE_ACTIONS: "true"
+    depends_on:
+      temporal:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8233:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider --quiet http://127.0.0.1:8080 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
 volumes:
   oncoagent-postgres-data:
   oncoagent-prometheus-data:
   oncoagent-tempo-data:
   oncoagent-grafana-data:
+  oncoagent-temporal-postgres-data:

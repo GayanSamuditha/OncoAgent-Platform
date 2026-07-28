@@ -64,8 +64,17 @@ from app.schemas.retrieval import (
 from app.services.crewai import _event
 from app.services.crewai import cancel_run as cancel_crewai_run
 from app.services.crewai import create_run as create_crewai_run
+from app.services.crewai import create_run_record as create_crewai_run_record
 from app.services.health import database_is_available
 from app.services.timeline import timeline
+from app.temporal.client import TemporalUnavailable
+from app.temporal.client import connect as temporal_connect
+from app.temporal.client import query_status as temporal_query_status
+from app.temporal.client import run_sync as temporal_run_sync
+from app.temporal.client import signal_cancel as temporal_signal_cancel
+from app.temporal.client import signal_review as temporal_signal_review
+from app.temporal.client import start_workflow as temporal_start_workflow
+from app.temporal.contracts import TemporalCrewWorkflowInput
 from app.workflow.audit import existing_decision
 from app.workflow.planner import (
     PLANNING_SYSTEM_PROMPT,
@@ -145,8 +154,14 @@ def crew_status(
         "memory": False,
         "delegation": False,
         "human_review_required": True,
+        "execution_mode": settings.crewai_execution_mode,
+        "temporal_enabled": settings.temporal_enabled,
+        "temporal_address": settings.temporal_address if settings.temporal_enabled else None,
+        "temporal_namespace": settings.temporal_namespace if settings.temporal_enabled else None,
+        "temporal_task_queue": settings.temporal_task_queue if settings.temporal_enabled else None,
         "limitations": [
-            "Development-only MCP identity; local background execution is not durable across process failure.",
+            "Development-only MCP identity.",
+            "Legacy mode is non-durable; Temporal mode resumes only from Activity boundaries.",
             "Synthetic development output; not clinically validated.",
         ],
     }
@@ -209,15 +224,59 @@ def create_crew_run(
         validate_crewai_request(
             request, {item for item in settings.crewai_mcp_dataset_ids.split(",") if item}
         )
-        run = create_crewai_run(request, settings)
+        if settings.crewai_execution_mode == "temporal":
+            if not settings.temporal_enabled:
+                raise HTTPException(status_code=503, detail="Temporal execution is disabled by policy")
+            run = create_crewai_run_record(request, settings, "temporal")
+            workflow_id = f"crewai:{run.id}"
+            with SessionLocal.begin() as session:
+                persisted = session.get(CrewRun, run.id)
+                if persisted:
+                    persisted.temporal_workflow_id = workflow_id
+                    persisted.temporal_namespace = settings.temporal_namespace
+                    persisted.temporal_task_queue = settings.temporal_task_queue
+                    persisted.temporal_execution_status = "starting"
+                    persisted.temporal_current_stage = "create_or_load_run"
+                    persisted.temporal_correlation_id = run.correlation_id
+            workflow_input = TemporalCrewWorkflowInput(
+                run_id=run.id,
+                request=request.model_dump(mode="json"),
+                temporal_workflow_id=workflow_id,
+                correlation_id=run.correlation_id,
+            )
+            try:
+                temporal_run = temporal_run_sync(temporal_start_workflow, settings, workflow_input)
+            except TemporalUnavailable as exc:
+                with SessionLocal.begin() as session:
+                    failed = session.get(CrewRun, run.id)
+                    if failed:
+                        failed.status = "failed"
+                        failed.error_category = "temporal_unavailable"
+                        failed.error_message = "Temporal execution is unavailable"
+                        failed.temporal_execution_status = "unavailable"
+                        failed.temporal_failure_type = "temporal_unavailable"
+                raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+            with SessionLocal.begin() as session:
+                persisted = session.get(CrewRun, run.id)
+                if persisted:
+                    persisted.temporal_run_id = temporal_run.get("run_id")
+                    persisted.temporal_execution_status = "running"
+            run = _crew_get(run.id)
+        else:
+            run = create_crewai_run(request, settings)
         return {
             "run_id": run.id,
             "status": run.status,
+            "execution_mode": run.temporal_execution_mode,
+            "temporal_workflow_id": run.temporal_workflow_id,
+            "temporal_run_id": run.temporal_run_id,
+            "temporal_ui_url": settings.temporal_ui_url if run.temporal_execution_mode == "temporal" else None,
             "created_at": run.created_at,
             "links": {
                 "self": f"/api/v1/crews/oncology-research/runs/{run.id}",
                 "events": f"/api/v1/crews/oncology-research/runs/{run.id}/events",
                 "output": f"/api/v1/crews/oncology-research/runs/{run.id}/output",
+                "temporal": f"/api/v1/crews/oncology-research/runs/{run.id}/temporal",
             },
         }
     except PermissionError as exc:
@@ -320,6 +379,22 @@ def crew_lineage(run_id: str, _: ActorContext = Depends(development_actor)) -> d
 
 @router.post("/api/v1/crews/oncology-research/runs/{run_id}/cancel")
 def cancel_crew(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    run_before = _crew_get(run_id)
+    if run_before.temporal_execution_mode == "temporal":
+        if run_before.actor_id != actor.actor_id:
+            raise HTTPException(status_code=403, detail="researcher may cancel only their own run")
+        if not run_before.temporal_workflow_id:
+            raise HTTPException(status_code=409, detail="Temporal workflow has not started")
+        try:
+            with SessionLocal.begin() as session:
+                persisted = session.get(CrewRun, run_id)
+                if persisted:
+                    persisted.status = "cancellation_requested"
+                    persisted.temporal_execution_status = "cancellation_requested"
+            temporal_run_sync(temporal_signal_cancel, get_settings(), run_before.temporal_workflow_id)
+        except TemporalUnavailable as exc:
+            raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+        return {"run_id": run_id, "status": "cancellation_requested", "execution_mode": "temporal"}
     try:
         run = cancel_crewai_run(run_id, actor.actor_id)
     except PermissionError as exc:
@@ -357,6 +432,30 @@ def review_crew(
         raise HTTPException(
             status_code=403, detail="initiating researcher cannot accept their own output"
         )
+    if run.temporal_execution_mode == "temporal":
+        with SessionLocal() as session:
+            item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
+        if item is None:
+            raise HTTPException(status_code=409, detail="CrewAI output is not awaiting review")
+        if item.status != "pending":
+            raise HTTPException(status_code=409, detail="CrewAI review already has a decision")
+        if not run.temporal_workflow_id:
+            raise HTTPException(status_code=409, detail="Temporal workflow has not started")
+        try:
+            temporal_run_sync(
+                temporal_signal_review,
+                get_settings(),
+                run.temporal_workflow_id,
+                {
+                    "decision": decision.decision,
+                    "comment": decision.comment,
+                    "reviewer_id": actor.actor_id,
+                    "reviewer_role": actor.role,
+                },
+            )
+        except TemporalUnavailable as exc:
+            raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+        return {"run_id": run_id, "status": "review_signaled", "review_status": decision.decision}
     with SessionLocal.begin() as session:
         item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
         if item is None:
@@ -395,6 +494,39 @@ def review_crew(
         )
         final_status = persisted_run.status
     return {"run_id": run_id, "status": final_status, "review_status": decision.decision}
+
+
+@router.get("/api/v1/crews/oncology-research/runs/{run_id}/temporal")
+def crew_temporal_status(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    run = _crew_get(run_id)
+    if run.temporal_execution_mode != "temporal" or not run.temporal_workflow_id:
+        return {"execution_mode": run.temporal_execution_mode, "available": False, "status": run.status}
+    try:
+        status_data = temporal_run_sync(temporal_query_status, get_settings(), run.temporal_workflow_id)
+    except TemporalUnavailable:
+        status_data = {"status": "temporal_unavailable"}
+    return {
+        "execution_mode": "temporal",
+        "available": status_data.get("status") != "temporal_unavailable",
+        "workflow_id": run.temporal_workflow_id,
+        "temporal_run_id": run.temporal_run_id,
+        "namespace": run.temporal_namespace,
+        "task_queue": run.temporal_task_queue,
+        "ui_url": get_settings().temporal_ui_url,
+        "application": _safe_model(run),
+        "workflow": status_data,
+    }
+
+
+@router.get("/api/v1/temporal/status")
+def temporal_status(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    if not settings.temporal_enabled:
+        return {"enabled": False, "available": False, "address": settings.temporal_address, "namespace": settings.temporal_namespace}
+    try:
+        temporal_run_sync(temporal_connect, settings)
+    except TemporalUnavailable:
+        return {"enabled": True, "available": False, "address": settings.temporal_address, "namespace": settings.temporal_namespace, "task_queue": settings.temporal_task_queue}
+    return {"enabled": True, "available": True, "address": settings.temporal_address, "namespace": settings.temporal_namespace, "task_queue": settings.temporal_task_queue, "ui_url": settings.temporal_ui_url}
 
 
 def _run_response(run: WorkflowRun) -> RunResponse:

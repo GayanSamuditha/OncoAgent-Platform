@@ -66,17 +66,23 @@ def _event(
     )
 
 
-def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
+def create_run_record(request: CrewRunRequest, settings: Any, execution_mode: str = "legacy") -> CrewRun:
     global _active_run, _worker_process
-    with SessionLocal.begin() as session:
-        if request.idempotency_key:
-            existing = (
-                session.query(CrewRun)
+    if request.idempotency_key:
+        with SessionLocal() as session:
+            existing_row = (
+                session.query(CrewRun.id)
                 .filter(CrewRun.idempotency_key == request.idempotency_key)
+                .limit(1)
                 .first()
             )
-            if existing:
-                return existing
+            existing_id = existing_row[0] if existing_row else None
+        if existing_id:
+            with SessionLocal() as session:
+                existing = session.get(CrewRun, existing_id)
+                if existing is not None:
+                    return existing
+    with SessionLocal.begin() as session:
         if _active_run:
             active = session.get(CrewRun, _active_run)
             if active and active.status in ACTIVE_STATUSES:
@@ -112,6 +118,7 @@ def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
                 "model_profile": request.model_profile,
             },
             idempotency_key=request.idempotency_key,
+            temporal_execution_mode=execution_mode,
             **current_trace_context(),
         )
         session.add(run)
@@ -168,14 +175,21 @@ def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
                 "human_review_required": True,
             },
         )
-        _active_run = run_id
-    _worker_process = Process(target=_execute, args=(run_id, request, settings), daemon=True)
-    _worker_process.start()
+        _active_run = run_id if execution_mode == "legacy" else None
     with SessionLocal() as session:
         persisted = session.get(CrewRun, run_id)
         if persisted is None:
             raise RuntimeError("CrewAI run could not be persisted")
         return persisted
+
+
+def create_run(request: CrewRunRequest, settings: Any) -> CrewRun:
+    """Explicit legacy worker mode retained for rollback and comparison."""
+    global _worker_process
+    run = create_run_record(request, settings, "legacy")
+    _worker_process = Process(target=_execute, args=(run.id, request, settings), daemon=True)
+    _worker_process.start()
+    return run
 
 
 def _execute(run_id: str, request: CrewRunRequest, settings: Any) -> None:
@@ -405,7 +419,9 @@ def recover_incomplete_runs() -> int:
     """
     recovered = 0
     with SessionLocal.begin() as session:
-        runs = session.query(CrewRun).filter(CrewRun.status.in_(ACTIVE_STATUSES)).all()
+        runs = session.query(CrewRun).filter(
+            CrewRun.status.in_(ACTIVE_STATUSES), CrewRun.temporal_execution_mode == "legacy"
+        ).all()
         for run in runs:
             run.status = "failed"
             run.error_category = "process_interrupted"

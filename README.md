@@ -290,3 +290,28 @@ LangGraph and CrewAI. The same source-controlled 16-scenario evaluation is
 used for baseline and hardened reports. Safe clarification, hard rejection,
 and policy prevention are reported separately. Results are synthetic,
 hardware-specific development measurements and are not clinically validated.
+
+## Phase 5B Temporal durable CrewAI execution
+
+Temporal `1.30.0` coordinates CrewAI lifecycle execution in the local
+`oncoagent` namespace. The pinned local images are Temporal server
+`temporalio/server:1.31.2`, admin tools `temporalio/admin-tools:1.31.2`, and
+Temporal UI `2.52.1`. Temporal listens on
+`127.0.0.1:7233`; the read-only UI is at `http://127.0.0.1:8233`.
+
+Start the isolated persistence dependency, idempotent schema jobs, server, and
+UI with `make temporal-up`, then start the Activity worker with
+`make temporal-worker`. The schema job initializes both the Temporal core and
+visibility databases and applies versioned updates before the server starts;
+it never touches the OncoAgent application PostgreSQL volume.
+Run `make migrate` to apply `0011_temporal_execution`. CrewAI uses Temporal
+when `CREWAI_EXECUTION_MODE=temporal`; Temporal failures return an explicit
+503 and never silently fall back to the legacy worker. Set
+`CREWAI_EXECUTION_MODE=legacy` only for an explicit rollback/comparison run.
+
+Temporal owns durable lifecycle, retries, heartbeats, cancellation, and the
+human-review wait. CrewAI's four-agent sequential topology and MCP-only
+clinical access are unchanged. PostgreSQL remains the application audit and
+business-record store; Temporal's event history is not copied into it. The
+recovery boundary is the last completed Activity or safe heartbeat, never a
+mid-token model position. See [`docs/temporal.md`](docs/temporal.md).
