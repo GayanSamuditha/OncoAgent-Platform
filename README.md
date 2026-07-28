@@ -315,3 +315,16 @@ clinical access are unchanged. PostgreSQL remains the application audit and
 business-record store; Temporal's event history is not copied into it. The
 recovery boundary is the last completed Activity or safe heartbeat, never a
 mid-token model position. See [`docs/temporal.md`](docs/temporal.md).
+
+## Phase 5C resilience certification
+
+The local resilience harness registers 16 bounded failure scenarios and
+validates Temporal history, retry classification, duplicate business records,
+human-review durability, audit/MCP lineage, direct Tempo retrieval, and
+telemetry redaction. Run `make resilience-certify` or select a scenario with
+`make resilience-certify SCENARIO=activity-cancellation`; reports are written
+to ignored `evaluation_outputs/resilience/`. Fault controls are local/test
+only, allowlisted, one-shot, disabled by default, and never exposed through
+the browser. The read-only view is `/resilience`. This is synthetic local
+development validation, not clinical or production certification. See
+[`docs/resilience.md`](docs/resilience.md).

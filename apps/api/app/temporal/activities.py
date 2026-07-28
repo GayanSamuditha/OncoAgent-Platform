@@ -30,6 +30,14 @@ def _cancel_requested(run_id: str) -> bool:
         return bool(run and run.status in {"cancellation_requested", "cancelled"})
 
 
+def _persist_heartbeat(run_id: str, stage: str) -> None:
+    with SessionLocal.begin() as session:
+        run = session.get(CrewRun, run_id)
+        if run:
+            run.temporal_current_stage = stage
+            run.temporal_last_heartbeat_at = datetime.now(UTC)
+
+
 async def _development_controls(run_id: str, stage: str) -> None:
     settings = get_settings()
     fault = configured_fault(settings, stage, activity.info().attempt)
@@ -40,6 +48,7 @@ async def _development_controls(run_id: str, stage: str) -> None:
         if _cancel_requested(run_id):
             raise application_failure("activity_cancelled", "Temporal cancellation observed at Activity boundary")
         _heartbeat(stage, "development_delay")
+        _persist_heartbeat(run_id, stage)
         await asyncio.sleep(0.25)
 
 

@@ -2,10 +2,10 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status db-up db-down observability-up observability-down migrate test lint typecheck check
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report db-up db-down observability-up observability-down migrate test lint typecheck check
 
 help:
-	@printf '%s\n' 'Targets: temporal-up temporal-schema temporal-status temporal-worker temporal-down db-up db-down migrate check'
+	@printf '%s\n' 'Targets: temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report db-up db-down migrate check'
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -42,6 +42,12 @@ temporal-down:
 
 temporal-status:
 	curl -sS http://127.0.0.1:8233/api/v1/namespaces/oncoagent | python3 -m json.tool
+
+resilience-certify:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/resilience_certify.py $(if $(SCENARIO),--scenario $(SCENARIO),)
+
+resilience-report:
+	@ls -t evaluation_outputs/resilience/*.md 2>/dev/null | head -1 || true
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d
