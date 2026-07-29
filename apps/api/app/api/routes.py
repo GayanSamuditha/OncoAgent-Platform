@@ -39,6 +39,12 @@ from app.models.crewai import (
 )
 from app.models.ingestion import FhirResource
 from app.models.mcp import MCPRequest
+from app.models.performance import (
+    PerformanceExecutionRecord,
+    PerformanceFindingRecord,
+    PerformanceMetricRecord,
+    PerformanceSLORecord,
+)
 from app.models.release_evaluation import (
     ReleaseEvaluationExecution,
     ReleaseGateResult,
@@ -46,8 +52,14 @@ from app.models.release_evaluation import (
 )
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
 from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
-from app.observability.metrics import prometheus_payload
+from app.observability.metrics import (
+    PERFORMANCE_OVERLOAD_REJECTIONS,
+    PERFORMANCE_QUEUE_WAIT,
+    observe,
+    prometheus_payload,
+)
 from app.observability.telemetry import observability_status
+from app.performance.limits import CapacityUnavailable, workflow_capacity
 from app.release_evaluation.policy import BLOCKING_GATES
 from app.repositories.ingestion import (
     get_dataset,
@@ -452,7 +464,20 @@ def create_crew_run(
                 raise HTTPException(
                     status_code=503, detail="Temporal execution is disabled by policy"
                 )
-            run = create_crewai_run_record(request, settings, "temporal")
+            try:
+                with workflow_capacity().acquire(
+                    settings.performance_queue_timeout_seconds
+                ) as wait:
+                    observe(PERFORMANCE_QUEUE_WAIT, wait, {"queue": "workflow"})
+                    run = create_crewai_run_record(request, settings, "temporal")
+            except CapacityUnavailable as exc:
+                observe(
+                    PERFORMANCE_OVERLOAD_REJECTIONS,
+                    labels={"queue": "workflow", "reason": "capacity"},
+                )
+                raise HTTPException(
+                    status_code=503, detail="workflow capacity is busy; retry later"
+                ) from exc
             workflow_id = f"crewai:{run.id}"
             with SessionLocal.begin() as session:
                 persisted = session.get(CrewRun, run.id)
@@ -490,7 +515,20 @@ def create_crew_run(
                     persisted.temporal_execution_status = "running"
             run = _crew_get(run.id)
         else:
-            run = create_crewai_run(request, settings)
+            try:
+                with workflow_capacity().acquire(
+                    settings.performance_queue_timeout_seconds
+                ) as wait:
+                    observe(PERFORMANCE_QUEUE_WAIT, wait, {"queue": "workflow"})
+                    run = create_crewai_run(request, settings)
+            except CapacityUnavailable as exc:
+                observe(
+                    PERFORMANCE_OVERLOAD_REJECTIONS,
+                    labels={"queue": "workflow", "reason": "capacity"},
+                )
+                raise HTTPException(
+                    status_code=503, detail="workflow capacity is busy; retry later"
+                ) from exc
         return {
             "run_id": run.id,
             "status": run.status,
@@ -895,7 +933,18 @@ def create_workflow_run(
         workflow_actor = WorkflowActorContext.model_validate(
             {"actor_id": actor.actor_id, "role": actor.role}
         )
-        return _run_response(create_run(request, workflow_actor, settings))
+        try:
+            with workflow_capacity().acquire(settings.performance_queue_timeout_seconds) as wait:
+                observe(PERFORMANCE_QUEUE_WAIT, wait, {"queue": "workflow"})
+                return _run_response(create_run(request, workflow_actor, settings))
+        except CapacityUnavailable as exc:
+            observe(
+                PERFORMANCE_OVERLOAD_REJECTIONS,
+                labels={"queue": "workflow", "reason": "capacity"},
+            )
+            raise HTTPException(
+                status_code=503, detail="workflow capacity is busy; retry later"
+            ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -1708,6 +1757,149 @@ def release_evaluation_metrics(
         "items": [_safe_model(item) for item in rows],
         "notice": "N/A metrics are not inferred as passes.",
     }
+
+
+@router.get("/api/v1/performance")
+def performance_executions(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    actor: ActorContext = Depends(development_actor),
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_read")
+        rows = list(
+            session.scalars(
+                select(PerformanceExecutionRecord)
+                .order_by(PerformanceExecutionRecord.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+    return {
+        "items": [_safe_model(item) for item in rows],
+        "page": page,
+        "page_size": page_size,
+        "notice": "Synthetic development performance evaluation; local hardware-specific; not clinically validated.",
+    }
+
+
+@router.get("/api/v1/performance/policy")
+def performance_policy(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_policy_read")
+    return {
+        "contract_version": "7B.1",
+        "profiles": [
+            "api-read-light",
+            "api-read-concurrent",
+            "langgraph-cohort",
+            "crewai-temporal",
+            "mcp-read",
+            "mixed-platform",
+            "cancellation-load",
+            "retry-recovery",
+            "authorization-denial",
+            "model-saturation",
+        ],
+        "blocking_correctness_gates": {
+            "authorization_bypass_rate": 0,
+            "duplicate_business_record_rate": 0,
+            "orphan_mcp_request_rate": 0,
+            "cancellation_finalization_rate": 0,
+            "policy_denial_retry_rate": 0,
+            "telemetry_redaction_violations": 0,
+        },
+        "latency_slos_are_local_development_only": True,
+        "notice": "Performance results are bounded, synthetic, and hardware-specific; not production capacity evidence.",
+    }
+
+
+@router.get("/api/v1/performance/executions/{execution_id}")
+def performance_execution(
+    execution_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_read")
+        item = session.scalar(
+            select(PerformanceExecutionRecord).where(
+                PerformanceExecutionRecord.execution_id == execution_id
+            )
+        )
+    if item is None:
+        raise HTTPException(status_code=404, detail="performance execution not found")
+    return _safe_model(item)
+
+
+@router.get("/api/v1/performance/executions/{execution_id}/metrics")
+def performance_metrics(
+    execution_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_read")
+        execution = session.scalar(
+            select(PerformanceExecutionRecord).where(
+                PerformanceExecutionRecord.execution_id == execution_id
+            )
+        )
+        rows = list(
+            session.scalars(
+                select(PerformanceMetricRecord).where(
+                    PerformanceMetricRecord.execution_id == execution_id
+                )
+            )
+        )
+    if execution is None:
+        raise HTTPException(status_code=404, detail="performance execution not found")
+    return {
+        "items": [_safe_model(item) for item in rows],
+        "notice": "N/A measurements are not inferred as passes.",
+    }
+
+
+@router.get("/api/v1/performance/executions/{execution_id}/slos")
+def performance_slos(
+    execution_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_read")
+        execution = session.scalar(
+            select(PerformanceExecutionRecord).where(
+                PerformanceExecutionRecord.execution_id == execution_id
+            )
+        )
+        rows = list(
+            session.scalars(
+                select(PerformanceSLORecord).where(
+                    PerformanceSLORecord.execution_id == execution_id
+                )
+            )
+        )
+    if execution is None:
+        raise HTTPException(status_code=404, detail="performance execution not found")
+    return {"items": [_safe_model(item) for item in rows]}
+
+
+@router.get("/api/v1/performance/executions/{execution_id}/findings")
+def performance_findings(
+    execution_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="performance_read")
+        execution = session.scalar(
+            select(PerformanceExecutionRecord).where(
+                PerformanceExecutionRecord.execution_id == execution_id
+            )
+        )
+        rows = list(
+            session.scalars(
+                select(PerformanceFindingRecord).where(
+                    PerformanceFindingRecord.execution_id == execution_id
+                )
+            )
+        )
+    if execution is None:
+        raise HTTPException(status_code=404, detail="performance execution not found")
+    return {"items": [_safe_model(item) for item in rows]}
 
 
 @router.get("/api/v1/evaluations/{evaluation_id}")

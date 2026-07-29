@@ -153,6 +153,17 @@ def evaluate_candidate(
     gates = evaluate_gates(metrics)
     regressions = detect_regressions(metrics)
     decision, reasons = decide_release(gates, regressions)
+    # A required workload that was not actually exercised is a release
+    # evidence defect.  It must not be hidden behind otherwise passing
+    # governance metrics or a health-probe result.
+    unsupported_workloads = candidate_data.get("not_evaluable_workloads", [])
+    if isinstance(unsupported_workloads, list) and unsupported_workloads:
+        decision = "blocked"
+        reasons = [
+            *reasons,
+            "required workload measurements are not evaluable: "
+            + ", ".join(str(item) for item in unsupported_workloads),
+        ]
     return ReleaseEvaluationReport(
         evaluation_id=str(uuid4()),
         report_version="phase6b-release-v1",

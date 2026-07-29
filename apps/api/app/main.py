@@ -21,6 +21,7 @@ from app.observability.metrics import (
     observe,
 )
 from app.observability.telemetry import configure, current_trace_context
+from app.performance.limits import reset_workflow_capacity
 from app.services.crewai import recover_incomplete_runs
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +34,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     if issues:
         details = "; ".join(f"{issue.field}: {issue.reason}" for issue in issues)
         raise RuntimeError(f"invalid runtime configuration: {details}")
+    # Capacity is intentionally process-local.  Reset it at each application
+    # lifespan so a fresh worker never inherits stale in-memory accounting
+    # from a previous test/client task or a prior reload.
+    reset_workflow_capacity(settings.api_workflow_concurrency)
     configure_logging(settings.log_level)
     configure(settings)
     try:

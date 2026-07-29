@@ -13,3 +13,21 @@ groups:
       - alert: OncoAgentGovernanceGateFailure
         expr: oncoagent_governance_gate_status == 0
         for: 1m
+      - alert: OncoAgentPerformanceOverload
+        expr: rate(oncoagent_performance_overload_rejections_total[5m]) > 0.1
+        for: 5m
+      - alert: OncoAgentDatabasePoolPressure
+        expr: oncoagent_performance_queue_depth{queue="database"} > 0
+        for: 5m
+      - alert: OncoAgentTemporalQueueBacklog
+        expr: oncoagent_performance_queue_depth{queue="temporal"} > 0
+        for: 5m
+      - alert: OncoAgentRetrySpike
+        expr: rate(oncoagent_temporal_activity_retries_total[5m]) > 0.1
+        for: 5m
+      - alert: OncoAgentMcpErrorSpike
+        expr: rate(oncoagent_mcp_errors_total[5m]) > 0.1
+        for: 5m
+      - alert: OncoAgentCancellationFailure
+        expr: rate(oncoagent_performance_cancellation_latency_seconds_count[5m]) > 0 and oncoagent_performance_slo_status{slo="cancellation_correctness",status="fail"} == 1
+        for: 1m

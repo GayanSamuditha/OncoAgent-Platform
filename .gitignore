@@ -149,6 +149,9 @@ activemq-data/
 
 # Environments
 .env
+evaluation_outputs/performance/
+performance_outputs/
+backups/
 .envrc
 .venv
 env/

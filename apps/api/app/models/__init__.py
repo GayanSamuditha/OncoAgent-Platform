@@ -33,6 +33,13 @@ from app.models.ingestion import (
     Procedure,
 )
 from app.models.mcp import MCPRequest
+from app.models.performance import (
+    PerformanceExecutionRecord,
+    PerformanceFindingRecord,
+    PerformanceMetricRecord,
+    PerformanceSLORecord,
+    PerformanceTestPlanRecord,
+)
 from app.models.release_evaluation import (
     ReleaseCandidateRecord,
     ReleaseDecision,
@@ -86,6 +93,11 @@ __all__ = [
     "PolicyDecision",
     "WorkflowLineage",
     "MCPRequest",
+    "PerformanceTestPlanRecord",
+    "PerformanceExecutionRecord",
+    "PerformanceMetricRecord",
+    "PerformanceSLORecord",
+    "PerformanceFindingRecord",
     "CrewRun",
     "CrewAgent",
     "CrewTask",

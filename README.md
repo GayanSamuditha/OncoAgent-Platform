@@ -362,3 +362,13 @@ bounded service checks, and `make platform-down` for a non-destructive stop.
 The stack is synthetic-data-only and not clinically validated. Ollama remains
 host-based on Apple Silicon; no model files or credentials are copied into
 images.
+
+## Phase 7B performance and reliability
+
+Phase 7B provides bounded local workload profiles and sanitized aggregate
+reports. Run `make performance-smoke` or select a source-controlled profile
+with `make performance-run PROFILE=api-read-concurrent`. Reports are ignored
+under `evaluation_outputs/performance/`; see [docs/performance.md](docs/performance.md).
+Measurements use synthetic data and local hardware and are not clinical,
+production-capacity, or certification evidence. Correctness controls remain
+blocking while latency is informational by default.

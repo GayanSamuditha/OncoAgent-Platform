@@ -163,42 +163,120 @@ class Settings(BaseSettings):
     temporal_enabled: bool = Field(default=True, validation_alias="TEMPORAL_ENABLED")
     temporal_address: str = Field(default="127.0.0.1:7233", validation_alias="TEMPORAL_ADDRESS")
     temporal_namespace: str = Field(default="oncoagent", validation_alias="TEMPORAL_NAMESPACE")
-    temporal_task_queue: str = Field(default="oncoagent-crewai", validation_alias="TEMPORAL_TASK_QUEUE")
-    temporal_ui_url: str = Field(default="http://127.0.0.1:8233", validation_alias="TEMPORAL_UI_URL")
-    temporal_workflow_execution_timeout_seconds: int = Field(default=1800, ge=60, le=86400, validation_alias="TEMPORAL_WORKFLOW_EXECUTION_TIMEOUT_SECONDS")
-    temporal_activity_start_to_close_seconds: int = Field(default=300, ge=10, le=3600, validation_alias="TEMPORAL_ACTIVITY_START_TO_CLOSE_SECONDS")
-    temporal_activity_schedule_to_close_seconds: int = Field(default=900, ge=30, le=7200, validation_alias="TEMPORAL_ACTIVITY_SCHEDULE_TO_CLOSE_SECONDS")
-    temporal_activity_heartbeat_seconds: int = Field(default=30, ge=5, le=300, validation_alias="TEMPORAL_ACTIVITY_HEARTBEAT_SECONDS")
-    temporal_max_activity_attempts: int = Field(default=2, ge=1, le=5, validation_alias="TEMPORAL_MAX_ACTIVITY_ATTEMPTS")
+    temporal_task_queue: str = Field(
+        default="oncoagent-crewai", validation_alias="TEMPORAL_TASK_QUEUE"
+    )
+    temporal_ui_url: str = Field(
+        default="http://127.0.0.1:8233", validation_alias="TEMPORAL_UI_URL"
+    )
+    temporal_workflow_execution_timeout_seconds: int = Field(
+        default=1800,
+        ge=60,
+        le=86400,
+        validation_alias="TEMPORAL_WORKFLOW_EXECUTION_TIMEOUT_SECONDS",
+    )
+    temporal_activity_start_to_close_seconds: int = Field(
+        default=300, ge=10, le=3600, validation_alias="TEMPORAL_ACTIVITY_START_TO_CLOSE_SECONDS"
+    )
+    temporal_activity_schedule_to_close_seconds: int = Field(
+        default=900, ge=30, le=7200, validation_alias="TEMPORAL_ACTIVITY_SCHEDULE_TO_CLOSE_SECONDS"
+    )
+    temporal_activity_heartbeat_seconds: int = Field(
+        default=30, ge=5, le=300, validation_alias="TEMPORAL_ACTIVITY_HEARTBEAT_SECONDS"
+    )
+    temporal_max_activity_attempts: int = Field(
+        default=2, ge=1, le=5, validation_alias="TEMPORAL_MAX_ACTIVITY_ATTEMPTS"
+    )
     temporal_dev_fault_stage: str = Field(default="", validation_alias="TEMPORAL_DEV_FAULT_STAGE")
-    temporal_dev_fault_category: str = Field(default="", validation_alias="TEMPORAL_DEV_FAULT_CATEGORY")
-    temporal_dev_fault_attempts: int = Field(default=1, ge=1, le=2, validation_alias="TEMPORAL_DEV_FAULT_ATTEMPTS")
-    temporal_dev_activity_delay_seconds: float = Field(default=0, ge=0, le=120, validation_alias="TEMPORAL_DEV_ACTIVITY_DELAY_SECONDS")
+    temporal_dev_fault_category: str = Field(
+        default="", validation_alias="TEMPORAL_DEV_FAULT_CATEGORY"
+    )
+    temporal_dev_fault_attempts: int = Field(
+        default=1, ge=1, le=2, validation_alias="TEMPORAL_DEV_FAULT_ATTEMPTS"
+    )
+    temporal_dev_activity_delay_seconds: float = Field(
+        default=0, ge=0, le=120, validation_alias="TEMPORAL_DEV_ACTIVITY_DELAY_SECONDS"
+    )
     observability_enabled: bool = Field(default=True, validation_alias="OBSERVABILITY_ENABLED")
     otel_service_name: str = Field(default="oncoagent-api", validation_alias="OTEL_SERVICE_NAME")
     otel_exporter_otlp_endpoint: str = Field(
         default="http://127.0.0.1:4317", validation_alias="OTEL_EXPORTER_OTLP_ENDPOINT"
     )
-    otel_exporter_otlp_protocol: str = Field(default="grpc", validation_alias="OTEL_EXPORTER_OTLP_PROTOCOL")
+    otel_exporter_otlp_protocol: str = Field(
+        default="grpc", validation_alias="OTEL_EXPORTER_OTLP_PROTOCOL"
+    )
     otel_traces_exporter: str = Field(default="otlp", validation_alias="OTEL_TRACES_EXPORTER")
     otel_metrics_exporter: str = Field(default="otlp", validation_alias="OTEL_METRICS_EXPORTER")
     otel_log_level: str = Field(default="INFO", validation_alias="OTEL_LOG_LEVEL")
-    otel_trace_sample_ratio: float = Field(default=1.0, ge=0, le=1, validation_alias="OTEL_TRACE_SAMPLE_RATIO")
-    prometheus_metrics_enabled: bool = Field(default=True, validation_alias="PROMETHEUS_METRICS_ENABLED")
-    prometheus_metrics_path: str = Field(default="/metrics", validation_alias="PROMETHEUS_METRICS_PATH")
-    structured_logging_enabled: bool = Field(default=True, validation_alias="STRUCTURED_LOGGING_ENABLED")
+    otel_trace_sample_ratio: float = Field(
+        default=1.0, ge=0, le=1, validation_alias="OTEL_TRACE_SAMPLE_RATIO"
+    )
+    prometheus_metrics_enabled: bool = Field(
+        default=True, validation_alias="PROMETHEUS_METRICS_ENABLED"
+    )
+    prometheus_metrics_path: str = Field(
+        default="/metrics", validation_alias="PROMETHEUS_METRICS_PATH"
+    )
+    structured_logging_enabled: bool = Field(
+        default=True, validation_alias="STRUCTURED_LOGGING_ENABLED"
+    )
     identity_enabled: bool = Field(default=True, validation_alias="IDENTITY_ENABLED")
-    identity_issuer: str = Field(default="http://127.0.0.1:8000/local-oidc", validation_alias="IDENTITY_ISSUER")
-    identity_audience: str = Field(default="oncoagent-platform", validation_alias="IDENTITY_AUDIENCE")
-    identity_signing_secret: str = Field(default="local-development-only-change-me", validation_alias="IDENTITY_SIGNING_SECRET")
-    identity_session_cookie: str = Field(default="oncoagent_session", validation_alias="IDENTITY_SESSION_COOKIE")
-    identity_session_ttl_seconds: int = Field(default=3600, ge=60, le=86400, validation_alias="IDENTITY_SESSION_TTL_SECONDS")
+    identity_issuer: str = Field(
+        default="http://127.0.0.1:8000/local-oidc", validation_alias="IDENTITY_ISSUER"
+    )
+    identity_audience: str = Field(
+        default="oncoagent-platform", validation_alias="IDENTITY_AUDIENCE"
+    )
+    identity_signing_secret: str = Field(
+        default="local-development-only-change-me", validation_alias="IDENTITY_SIGNING_SECRET"
+    )
+    identity_session_cookie: str = Field(
+        default="oncoagent_session", validation_alias="IDENTITY_SESSION_COOKIE"
+    )
+    identity_session_ttl_seconds: int = Field(
+        default=3600, ge=60, le=86400, validation_alias="IDENTITY_SESSION_TTL_SECONDS"
+    )
     identity_cookie_secure: bool = Field(default=False, validation_alias="IDENTITY_COOKIE_SECURE")
     identity_dev_users: str = Field(default="", validation_alias="IDENTITY_DEV_USERS")
     identity_allowed_roles: list[str] = [
-        "researcher", "reviewer", "governance_officer", "platform_operator", "auditor", "administrator"
+        "researcher",
+        "reviewer",
+        "governance_officer",
+        "platform_operator",
+        "auditor",
+        "administrator",
     ]
-    identity_legacy_headers_enabled: bool = Field(default=True, validation_alias="IDENTITY_LEGACY_HEADERS_ENABLED")
+    identity_legacy_headers_enabled: bool = Field(
+        default=True, validation_alias="IDENTITY_LEGACY_HEADERS_ENABLED"
+    )
+    performance_enabled: bool = Field(default=True, validation_alias="PERFORMANCE_ENABLED")
+    performance_max_concurrency: int = Field(
+        default=8, ge=1, le=32, validation_alias="PERFORMANCE_MAX_CONCURRENCY"
+    )
+    performance_queue_timeout_seconds: float = Field(
+        default=5, ge=0.1, le=60, validation_alias="PERFORMANCE_QUEUE_TIMEOUT_SECONDS"
+    )
+    performance_run_timeout_seconds: int = Field(
+        default=600, ge=10, le=3600, validation_alias="PERFORMANCE_RUN_TIMEOUT_SECONDS"
+    )
+    api_workflow_concurrency: int = Field(
+        default=1, ge=1, le=8, validation_alias="API_WORKFLOW_CONCURRENCY"
+    )
+    langgraph_concurrency: int = Field(
+        default=1, ge=1, le=8, validation_alias="LANGGRAPH_CONCURRENCY"
+    )
+    mcp_concurrency: int = Field(default=8, ge=1, le=32, validation_alias="MCP_CONCURRENCY")
+    ollama_concurrency: int = Field(default=1, ge=1, le=2, validation_alias="OLLAMA_CONCURRENCY")
+    database_pool_size: int = Field(default=5, ge=1, le=20, validation_alias="DATABASE_POOL_SIZE")
+    database_max_overflow: int = Field(
+        default=5, ge=0, le=20, validation_alias="DATABASE_MAX_OVERFLOW"
+    )
+    retry_budget_per_operation: int = Field(
+        default=2, ge=0, le=5, validation_alias="RETRY_BUDGET_PER_OPERATION"
+    )
+    performance_blocking_latency_slos: bool = Field(
+        default=False, validation_alias="PERFORMANCE_BLOCKING_LATENCY_SLOS"
+    )
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore", populate_by_name=True
