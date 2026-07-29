@@ -3,11 +3,12 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from crewai_client.policy import validate_request as validate_crewai_request
 from crewai_client.schemas import ActorContext as CrewActorContext
 from crewai_client.schemas import CrewReviewRequest, CrewRunRequest
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +16,18 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.cross_framework.registry import framework_agents
 from app.db.session import SessionLocal, get_db
+from app.identity.auth import development_actor, identity_guard
+from app.identity.schemas import IdentityAssignmentRequest, IdentitySummary, LocalLoginRequest
+from app.identity.service import (
+    AuthenticatedUser,
+    authenticate_request,
+    ensure_local_user,
+    issue_session,
+    record_access,
+    require_dataset,
+    require_permission,
+    require_reviewer,
+)
 from app.mcp_identity import configured_clients
 from app.models.crewai import (
     CrewEvent,
@@ -85,7 +98,9 @@ from app.workflow.planner import (
 )
 from app.workflow.policy_selection import select_policy
 from app.workflow.schemas import (
-    ActorContext,
+    ActorContext as WorkflowActorContext,
+)
+from app.workflow.schemas import (
     ApprovalDecisionRequest,
     Criterion,
     RunCreateRequest,
@@ -102,22 +117,112 @@ from app.workflow.service import (
 )
 from app.workflow.tools import build_tool_registry
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(identity_guard)])
+ActorContext = AuthenticatedUser
 
 
-def _crew_actor(actor: ActorContext) -> CrewActorContext:
+@router.get("/local-oidc/.well-known/openid-configuration")
+def local_oidc_configuration(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return {
+        "issuer": settings.identity_issuer,
+        "authorization_endpoint": f"{settings.identity_issuer}/authorize",
+        "token_endpoint": f"{settings.identity_issuer}/token",
+        "userinfo_endpoint": f"{settings.identity_issuer}/userinfo",
+        "jwks_uri": f"{settings.identity_issuer}/jwks.json",
+        "response_types_supported": ["code"],
+        "subject_types_supported": ["public"],
+        "id_token_signing_alg_values_supported": ["HS256"],
+        "local_development_only": True,
+    }
+
+
+@router.post("/api/v1/auth/login", response_model=IdentitySummary)
+def local_login(request: LocalLoginRequest, response: Response, settings: Settings = Depends(get_settings)) -> IdentitySummary:
+    if not settings.identity_enabled:
+        raise HTTPException(status_code=503, detail="identity authentication is disabled")
+    with SessionLocal() as session:
+        user = ensure_local_user(session, settings, request.user_key)
+        record_access(session, user, "login", "session", None, "allow", "local_identity_authenticated")
+        token = issue_session(user, settings)
+        response.set_cookie(settings.identity_session_cookie, token, httponly=True, secure=settings.identity_cookie_secure, samesite="lax", max_age=settings.identity_session_ttl_seconds, path="/")
+        return IdentitySummary(user_id=user.internal_id, subject=user.subject, display_name=user.display_name, role=user.role, permissions=sorted(user.permissions), dataset_ids=sorted(user.dataset_ids), issuer=user.issuer, expires_in_seconds=settings.identity_session_ttl_seconds)
+
+
+@router.post("/api/v1/auth/logout")
+def local_logout(request: Request, response: Response, settings: Settings = Depends(get_settings)) -> dict[str, str]:
+    with SessionLocal() as session:
+        try:
+            user = authenticate_request(request, session, settings)
+            record_access(session, user, "logout", "session", None, "allow", "session_cleared")
+        except HTTPException:
+            pass
+    response.delete_cookie(settings.identity_session_cookie, path="/")
+    return {"status": "logged_out"}
+
+
+@router.get("/api/v1/auth/me", response_model=IdentitySummary)
+def identity_me(actor: AuthenticatedUser = Depends(development_actor), settings: Settings = Depends(get_settings)) -> IdentitySummary:
+    return IdentitySummary(user_id=actor.internal_id, subject=actor.subject, display_name=actor.display_name, role=actor.role, permissions=sorted(actor.permissions), dataset_ids=sorted(actor.dataset_ids), issuer=actor.issuer, expires_in_seconds=settings.identity_session_ttl_seconds)
+
+
+@router.get("/api/v1/identity/users")
+def identity_users(actor: AuthenticatedUser = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "identity:manage", session, action="identity_admin_read")
+        from app.models.identity import DatasetGrant, Role, User, UserRole
+
+        users = []
+        for user in session.scalars(select(User).order_by(User.created_at)):
+            role = session.scalar(select(Role.name).join(UserRole, UserRole.role_id == Role.id).where(UserRole.user_id == user.id))
+            datasets = list(session.scalars(select(DatasetGrant.dataset_id).where(DatasetGrant.user_id == user.id, DatasetGrant.enabled.is_(True))))
+            users.append({"user_id": user.id, "subject": user.external_subject, "display_name": user.display_name, "enabled": user.enabled, "role": role, "dataset_ids": datasets})
+    return {"items": users, "local_development_only": True}
+
+
+@router.post("/api/v1/identity/users/{user_id}/role")
+def assign_identity_role(user_id: str, request: IdentityAssignmentRequest, actor: AuthenticatedUser = Depends(development_actor)) -> dict[str, str]:
+    with SessionLocal() as session:
+        require_permission(actor, "identity:manage", session, action="identity_role_assign")
+        from app.models.identity import Role, User, UserRole
+
+        user = session.get(User, user_id)
+        role = session.scalar(select(Role).where(Role.name == request.value))
+        if user is None or role is None:
+            raise HTTPException(status_code=404, detail="identity or role not found")
+        assignment = session.scalar(select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role.id))
+        if assignment is None:
+            session.add(UserRole(id=str(uuid4()), user_id=user_id, role_id=role.id))
+        record_access(session, actor, "identity_role_assign", "user", user_id, "allow", "role_assignment_changed")
+    return {"status": "updated", "user_id": user_id, "role": request.value}
+
+
+@router.post("/api/v1/identity/users/{user_id}/dataset-grants")
+def assign_identity_dataset(user_id: str, request: IdentityAssignmentRequest, actor: AuthenticatedUser = Depends(development_actor)) -> dict[str, str]:
+    with SessionLocal() as session:
+        require_permission(actor, "identity:manage", session, action="identity_dataset_grant")
+        from app.models.identity import DatasetGrant, User
+        from app.models.ingestion import Dataset
+
+        if session.get(User, user_id) is None or session.get(Dataset, request.value) is None:
+            raise HTTPException(status_code=404, detail="identity or dataset not found")
+        grant = session.scalar(select(DatasetGrant).where(DatasetGrant.user_id == user_id, DatasetGrant.dataset_id == request.value))
+        if grant is None:
+            grant = DatasetGrant(id=str(uuid4()), user_id=user_id, dataset_id=request.value, granted_by=actor.internal_id, enabled=request.enabled)
+            session.add(grant)
+        else:
+            grant.enabled = request.enabled
+        record_access(session, actor, "identity_dataset_grant", "dataset", request.value, "allow", "dataset_grant_changed")
+    return {"status": "updated", "user_id": user_id, "dataset_id": request.value}
+
+
+def _crew_actor(actor: AuthenticatedUser) -> CrewActorContext:
     return CrewActorContext(actor_id=actor.actor_id, actor_role=actor.role)
 
 
-def development_actor(
-    x_actor_id: str | None = Header(default=None), x_actor_role: str | None = Header(default=None)
-) -> ActorContext:
-    if not x_actor_id or x_actor_role not in {"researcher", "reviewer", "admin"}:
-        raise HTTPException(
-            status_code=401,
-            detail="X-Actor-Id and X-Actor-Role are required development identity headers",
-        )
-    return ActorContext(actor_id=x_actor_id, role=x_actor_role)  # type: ignore[arg-type]
+def _require_run_access(actor: AuthenticatedUser, dataset_id: str, creator_id: str, session: Session, *, action: str) -> None:
+    require_dataset(actor, dataset_id, session, action=action)
+    if creator_id != actor.actor_id and "workflow:read-all" not in actor.permissions:
+        raise HTTPException(status_code=403, detail="run access denied")
 
 
 @router.get("/api/v1/crews")
@@ -215,13 +320,24 @@ def create_crew_run(
         raise HTTPException(status_code=503, detail="CrewAI is disabled by platform policy")
     if not settings.crewai_mcp_client_id or not settings.crewai_mcp_token:
         raise HTTPException(status_code=503, detail="CrewAI MCP client is not configured")
-    if (
-        request.actor_context.actor_id != actor.actor_id
-        or request.actor_context.actor_role != actor.role
-    ):
-        raise HTTPException(
-            status_code=403, detail="request actor context must match development identity headers"
-        )
+    with SessionLocal() as session:
+        require_permission(actor, "workflow:create", session, action="crew_run_create")
+        require_dataset(actor, request.dataset_id, session, action="crew_run_create")
+    if request.actor_context.actor_id != actor.actor_id or request.actor_context.actor_role != actor.role:
+        # The authenticated session is authoritative.  Rejecting a mismatch
+        # makes privilege-escalation attempts explicit while preserving a
+        # sanitized contract for every accepted request.
+        raise HTTPException(status_code=403, detail="request actor context does not match authenticated identity")
+    if actor.role not in {"researcher", "reviewer", "administrator"}:
+        raise HTTPException(status_code=403, detail="identity is not authorized to run CrewAI research")
+    request = request.model_copy(
+        update={
+            "actor_context": CrewActorContext(
+                actor_id=actor.actor_id,
+                actor_role="admin" if actor.role == "administrator" else actor.role,
+            )
+        }
+    )
     try:
         validate_crewai_request(
             request, {item for item in settings.crewai_mcp_dataset_ids.split(",") if item}
@@ -297,6 +413,44 @@ def _crew_get(run_id: str) -> CrewRun:
     return run
 
 
+def _authorized_crew_get(run_id: str, actor: AuthenticatedUser) -> CrewRun:
+    run = _crew_get(run_id)
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="crew_run_read")
+    return run
+
+
+def _review_authorized_crew_get(
+    run_id: str, actor: AuthenticatedUser, *, deciding: bool = False
+) -> CrewRun:
+    """Authorize review access independently of ordinary run ownership.
+
+    The creator can inspect their own review, while an assigned reviewer can
+    inspect or decide it with review permissions and the dataset grant.  No
+    reviewer is granted general run read access by this path.
+    """
+    run = _crew_get(run_id)
+    with SessionLocal() as session:
+        require_dataset(actor, run.dataset_id, session, action="crew_review_dataset_access")
+        is_creator = actor.actor_id == run.actor_id or actor.internal_id == run.actor_id
+        if is_creator:
+            require_permission(actor, "workflow:read-own", session, action="crew_review_read")
+            if deciding:
+                record_access(session, actor, "review_decision", "review", run_id, "deny", "self_approval")
+                raise HTTPException(status_code=403, detail="researcher cannot approve their own run")
+        else:
+            if not deciding:
+                require_permission(actor, "review:read-assigned", session, action="crew_review_read")
+            require_reviewer(
+                actor,
+                run.dataset_id,
+                session,
+                run.actor_id,
+                action="crew_review_decision" if deciding else "crew_review_read",
+            )
+    return run
+
+
 @router.get("/api/v1/crews/oncology-research/runs")
 def list_crew_runs(
     page: int = Query(default=1, ge=1),
@@ -304,9 +458,13 @@ def list_crew_runs(
     dataset_id: str | None = None,
     _: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
+    actor = _
     with SessionLocal() as session:
+        if dataset_id:
+            require_dataset(actor, dataset_id, session, action="crew_run_list")
         statement = (
             select(CrewRun)
+            .where(CrewRun.dataset_id.in_(actor.dataset_ids))
             .order_by(CrewRun.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -319,7 +477,11 @@ def list_crew_runs(
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}")
 def crew_run(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    return _safe_model(_crew_get(run_id))
+    actor = _
+    run = _crew_get(run_id)
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="crew_run_read")
+    return _safe_model(run)
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/events")
@@ -327,9 +489,9 @@ def crew_events(
     run_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=200),
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
-    _crew_get(run_id)
+    _authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         items = list(
             session.scalars(
@@ -344,8 +506,8 @@ def crew_events(
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/tasks")
-def crew_tasks(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    _crew_get(run_id)
+def crew_tasks(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         items = list(
             session.scalars(
@@ -356,8 +518,8 @@ def crew_tasks(run_id: str, _: ActorContext = Depends(development_actor)) -> dic
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/output")
-def crew_output(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    _crew_get(run_id)
+def crew_output(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         item = session.scalar(select(CrewOutput).where(CrewOutput.crew_run_id == run_id))
     if item is None:
@@ -370,8 +532,8 @@ def crew_output(run_id: str, _: ActorContext = Depends(development_actor)) -> di
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/lineage")
-def crew_lineage(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    _crew_get(run_id)
+def crew_lineage(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         item = session.scalar(select(CrewLineage).where(CrewLineage.crew_run_id == run_id))
     if item is None:
@@ -381,10 +543,14 @@ def crew_lineage(run_id: str, _: ActorContext = Depends(development_actor)) -> d
 
 @router.post("/api/v1/crews/oncology-research/runs/{run_id}/cancel")
 def cancel_crew(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    run_before = _crew_get(run_id)
+    run_before = _authorized_crew_get(run_id, actor)
+    with SessionLocal() as session:
+        require_dataset(actor, run_before.dataset_id, session, action="crew_cancel")
+        if run_before.actor_id == actor.actor_id:
+            require_permission(actor, "workflow:cancel-own", session, action="crew_cancel")
+        else:
+            require_permission(actor, "workflow:cancel-any", session, action="crew_cancel")
     if run_before.temporal_execution_mode == "temporal":
-        if run_before.actor_id != actor.actor_id:
-            raise HTTPException(status_code=403, detail="researcher may cancel only their own run")
         if not run_before.temporal_workflow_id:
             raise HTTPException(status_code=409, detail="Temporal workflow has not started")
         try:
@@ -409,8 +575,8 @@ def cancel_crew(run_id: str, actor: ActorContext = Depends(development_actor)) -
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/review")
-def get_crew_review(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
-    _crew_get(run_id)
+def get_crew_review(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    _review_authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
     if item is None:
@@ -422,18 +588,13 @@ def get_crew_review(run_id: str, _: ActorContext = Depends(development_actor)) -
 def review_crew(
     run_id: str, decision: CrewReviewRequest, actor: ActorContext = Depends(development_actor)
 ) -> dict[str, Any]:
-    if actor.role not in {"reviewer", "admin"}:
-        raise HTTPException(
-            status_code=403, detail="only reviewers or admins may review CrewAI output"
-        )
-    run = _crew_get(run_id)
-    if (
-        run.actor_id == actor.actor_id
-        and decision.decision == "accept_for_synthetic_research"
-    ):
-        raise HTTPException(
-            status_code=403, detail="initiating researcher cannot accept their own output"
-        )
+    run = _review_authorized_crew_get(run_id, actor, deciding=decision.decision != "cancel")
+    with SessionLocal() as session:
+        if decision.decision == "cancel" and actor.actor_id == run.actor_id:
+            require_permission(actor, "workflow:cancel-own", session, action="crew_review_cancel")
+            require_dataset(actor, run.dataset_id, session, action="crew_review_cancel")
+        elif decision.decision == "cancel":
+            require_reviewer(actor, run.dataset_id, session, run.actor_id, action="crew_review_cancel")
     if run.temporal_execution_mode == "temporal":
         with SessionLocal() as session:
             item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
@@ -521,7 +682,9 @@ def crew_temporal_status(run_id: str, _: ActorContext = Depends(development_acto
 
 
 @router.get("/api/v1/temporal/status")
-def temporal_status(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def temporal_status(settings: Settings = Depends(get_settings), actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "temporal:read", session, action="temporal_status_read")
     if not settings.temporal_enabled:
         return {"enabled": False, "available": False, "address": settings.temporal_address, "namespace": settings.temporal_namespace}
     try:
@@ -571,7 +734,11 @@ def create_workflow_run(
     settings: Settings = Depends(get_settings),
 ) -> RunResponse:
     try:
-        return _run_response(create_run(request, actor, settings))
+        with SessionLocal() as session:
+            require_permission(actor, "workflow:create", session, action="workflow_create")
+            require_dataset(actor, request.dataset_id, session, action="workflow_create")
+        workflow_actor = WorkflowActorContext.model_validate({"actor_id": actor.actor_id, "role": actor.role})
+        return _run_response(create_run(request, workflow_actor, settings))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except RuntimeError as exc:
@@ -583,11 +750,14 @@ def list_workflow_runs(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
     dataset_id: str | None = None,
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
     with SessionLocal() as session:
+        if dataset_id:
+            require_dataset(actor, dataset_id, session, action="workflow_list")
         statement = (
             select(WorkflowRun)
+            .where(WorkflowRun.dataset_id.in_(actor.dataset_ids))
             .order_by(WorkflowRun.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -603,10 +773,13 @@ def workflow_events(
     run_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=200),
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
-    if get_run(run_id) is None:
+    run = get_run(run_id)
+    if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_events_read")
     items = list_events(run_id)
     start = (page - 1) * page_size
     return {
@@ -621,10 +794,14 @@ def workflow_evidence(
     run_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=100, ge=1, le=200),
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
-    if get_run(run_id) is None:
+    run = get_run(run_id)
+    if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_evidence_read")
+        require_permission(actor, "evidence:read", session, action="workflow_evidence_read")
     items = list_evidence(run_id)
     start = (page - 1) * page_size
     return {
@@ -639,10 +816,13 @@ def workflow_candidates(
     run_id: str,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
-    if get_run(run_id) is None:
+    run = get_run(run_id)
+    if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_candidates_read")
     items = list_candidates(run_id)
     start = (page - 1) * page_size
     return {
@@ -665,10 +845,12 @@ def workflow_stream(run_id: str, _: ActorContext = Depends(development_actor)) -
 
 
 @router.get("/api/v1/runs/{run_id}", response_model=RunResponse)
-def workflow_run(run_id: str, _: ActorContext = Depends(development_actor)) -> RunResponse:
+def workflow_run(run_id: str, actor: ActorContext = Depends(development_actor)) -> RunResponse:
     run = get_run(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_read")
     return _run_response(run)
 
 
@@ -683,8 +865,12 @@ def cancel_workflow_run(
         raise HTTPException(status_code=404, detail="workflow run not found")
     if run.status in {"completed", "rejected", "cancelled", "failed", "needs_clarification"}:
         raise HTTPException(status_code=409, detail="terminal workflow runs cannot be cancelled")
-    if actor.role == "researcher" and actor.actor_id != run.actor_id:
-        raise HTTPException(status_code=403, detail="researchers may cancel only their own runs")
+    with SessionLocal() as session:
+        require_dataset(actor, run.dataset_id, session, action="workflow_cancel")
+        if actor.actor_id == run.actor_id:
+            require_permission(actor, "workflow:cancel-own", session, action="workflow_cancel")
+        else:
+            require_permission(actor, "workflow:cancel-any", session, action="workflow_cancel")
     if not run.approval_id:
         raise HTTPException(status_code=409, detail="run is not at a cancellable checkpoint")
     try:
@@ -708,12 +894,16 @@ def cancel_workflow_run(
 def approvals(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "review:read-assigned", session, action="review_queue_read")
     with SessionLocal() as session:
         items = list(
             session.scalars(
                 select(ApprovalRequest)
+                .join(WorkflowRun, WorkflowRun.id == ApprovalRequest.run_id)
+                .where(WorkflowRun.dataset_id.in_(actor.dataset_ids))
                 .order_by(ApprovalRequest.created_at.desc())
                 .offset((page - 1) * page_size)
                 .limit(page_size)
@@ -723,10 +913,16 @@ def approvals(
 
 
 @router.get("/api/v1/approvals/{approval_id}")
-def approval(approval_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def approval(approval_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
     item = get_approval_request(approval_id)
     if item is None:
         raise HTTPException(status_code=404, detail="approval request not found")
+    run = get_run(item.run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        require_permission(actor, "review:read-assigned", session, action="review_read")
+        require_dataset(actor, run.dataset_id, session, action="review_read")
     return _safe_model(item)
 
 
@@ -743,15 +939,16 @@ def approval_decision(
     run = get_run(approval_item.run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
+    with SessionLocal() as session:
+        if request.decision == "cancel" and actor.actor_id == run.actor_id:
+            require_permission(actor, "workflow:cancel-own", session, action="approval_cancel")
+            require_dataset(actor, run.dataset_id, session, action="approval_cancel")
+        else:
+            require_reviewer(actor, run.dataset_id, session, run.actor_id)
     if run.status in {"completed", "rejected", "cancelled", "failed", "needs_clarification"}:
         raise HTTPException(status_code=409, detail="workflow run is terminal")
     if existing_decision(approval_id) is not None:
         raise HTTPException(status_code=409, detail="approval already has a decision")
-    if request.decision in {"approve", "reject", "request_changes"} and actor.role not in {
-        "reviewer",
-        "admin",
-    }:
-        raise HTTPException(status_code=403, detail="only reviewers or admins may decide approval")
     if request.decision == "approve" and actor.actor_id == run.actor_id:
         raise HTTPException(
             status_code=403, detail="researcher and reviewer must be different actors"
@@ -786,8 +983,10 @@ def audit_events(
     task_correlation_failure: bool | None = None,
     dataset_mismatch: bool | None = None,
     missing_lifecycle_event: bool | None = None,
-    _: ActorContext = Depends(development_actor),
+    actor: ActorContext = Depends(development_actor),
 ) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="audit_read")
     with SessionLocal() as session:
         statement = (
             select(WorkflowEvent)
@@ -942,7 +1141,9 @@ def observability_configuration(settings: Settings = Depends(get_settings)) -> d
 
 
 @router.get("/api/v1/resilience/scenarios")
-def resilience_scenario_catalog(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def resilience_scenario_catalog(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "resilience:read", session, action="resilience_read")
     return {
         "registry_version": SCENARIO_REGISTRY_VERSION,
         "items": [item.model_dump() for item in resilience_scenarios()],
@@ -952,13 +1153,17 @@ def resilience_scenario_catalog(_: ActorContext = Depends(development_actor)) ->
 
 
 @router.get("/api/v1/resilience/certifications")
-def resilience_certifications(_: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def resilience_certifications(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "resilience:read", session, action="resilience_read")
     reports = load_reports()
     return {"items": reports, "count": len(reports), "registry_version": SCENARIO_REGISTRY_VERSION}
 
 
 @router.get("/api/v1/resilience/certifications/{certification_id}")
-def resilience_certification(certification_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def resilience_certification(certification_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "resilience:read", session, action="resilience_read")
     for report in load_reports():
         if report.get("certification_id") == certification_id:
             return report

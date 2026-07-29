@@ -63,3 +63,11 @@ synthetic-data notices, and no raw FHIR payloads.
 - `POST /api/v1/crews/oncology-research/runs` accepts a strict dataset-scoped request and returns `202`; it does not accept MCP URLs/tokens, arbitrary models/tools, SQL, paths, or approval decisions.
 - Run inspection is available at `/crews/oncology-research/runs/{run_id}`, `/events`, `/tasks`, and `/output`; output excludes scratchpads and raw FHIR.
 - `POST /crews/oncology-research/runs/{run_id}/review` accepts only the documented synthetic-research review decisions. Only reviewer/admin roles may decide, and the initiating researcher cannot accept their own run. Duplicate decisions return `409`.
+## Identity
+
+Protected APIs accept the local OIDC-compatible HttpOnly session created by
+`POST /api/v1/auth/login`; bearer tokens with validated issuer, audience, and
+expiry are also supported. `GET /api/v1/auth/me` returns the server-resolved
+role, permissions, and synthetic dataset grants. Missing authentication is
+401; authenticated permission or dataset denial is 403. The legacy actor
+headers are local-only compatibility and the role header is ignored.

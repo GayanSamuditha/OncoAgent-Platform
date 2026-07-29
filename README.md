@@ -328,3 +328,12 @@ only, allowlisted, one-shot, disabled by default, and never exposed through
 the browser. The read-only view is `/resilience`. This is synthetic local
 development validation, not clinical or production certification. See
 [`docs/resilience.md`](docs/resilience.md).
+
+## Phase 6A identity and access governance
+
+Phase 6A adds local OIDC-compatible identity sessions, database-backed RBAC,
+synthetic dataset grants, reviewer assignments, separation-of-duties checks,
+and append-only access-decision auditing. See
+[`docs/identity.md`](docs/identity.md). The local identity provider is a
+development simulation, not production SSO or healthcare compliance
+infrastructure.

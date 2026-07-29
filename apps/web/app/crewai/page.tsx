@@ -4,8 +4,6 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
-const researcherHeaders = { "X-Actor-Id": "researcher-console", "X-Actor-Role": "researcher" };
-const reviewerHeaders = { "X-Actor-Id": "reviewer-console", "X-Actor-Role": "reviewer" };
 type Json = Record<string, unknown>;
 
 export default function CrewAIPage() {
@@ -20,7 +18,7 @@ export default function CrewAIPage() {
   const temporalUiUrl = typeof temporal?.ui_url === "string" ? temporal.ui_url : "";
 
   useEffect(() => {
-    fetch(`${apiBase}/api/v1/crews/oncology-research/status`, { headers: researcherHeaders })
+    fetch(`${apiBase}/api/v1/crews/oncology-research/status`, { credentials: "include" })
       .then((response) => { if (!response.ok) throw new Error("CrewAI status unavailable."); return response.json(); })
       .then(setStatus).catch(() => setMessage("CrewAI status unavailable."));
   }, []);
@@ -29,11 +27,11 @@ export default function CrewAIPage() {
     const runId = typeof run?.run_id === "string" ? run.run_id : undefined;
     if (!runId) return;
     const timer = window.setInterval(() => {
-      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}`, { headers: researcherHeaders })
+      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}`, { credentials: "include" })
         .then((response) => response.json()).then(setRun).catch(() => setMessage("Run status unavailable."));
-      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}/output`, { headers: researcherHeaders })
+      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}/output`, { credentials: "include" })
         .then((response) => response.ok ? response.json() : null).then((value) => { if (value) setOutput(value.output ?? value); });
-      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}/temporal`, { headers: researcherHeaders })
+      fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${runId}/temporal`, { credentials: "include" })
         .then((response) => response.ok ? response.json() : null).then(setTemporal);
     }, 2000);
     return () => window.clearInterval(timer);
@@ -43,7 +41,7 @@ export default function CrewAIPage() {
     event.preventDefault(); setMessage("Starting bounded downstream crew…");
     try {
       const response = await fetch(`${apiBase}/api/v1/crews/oncology-research/runs`, {
-        method: "POST", headers: { ...researcherHeaders, "content-type": "application/json" },
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
         body: JSON.stringify({ dataset_id: dataset, research_question: question,
           structured_criteria: [{ criterion_type: "condition", clinical_concept: "hypertension", required: true },
             { criterion_type: "observation", clinical_concept: "elevated blood pressure", required: true }],
@@ -58,7 +56,7 @@ export default function CrewAIPage() {
   async function review(decision: "accept_for_synthetic_research" | "reject" | "request_changes") {
     if (!run?.run_id) return;
     const response = await fetch(`${apiBase}/api/v1/crews/oncology-research/runs/${run.run_id}/review`, {
-      method: "POST", headers: { ...reviewerHeaders, "content-type": "application/json" },
+      method: "POST", credentials: "include", headers: { "content-type": "application/json" },
       body: JSON.stringify({ decision, comment: "Reviewed for synthetic development use." }),
     });
     const body = await response.json(); setMessage(response.ok ? `Review recorded: ${decision}.` : String(body.detail ?? "Review failed."));
