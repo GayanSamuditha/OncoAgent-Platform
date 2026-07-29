@@ -353,3 +353,12 @@ and append-only access-decision auditing. See
 [`docs/identity.md`](docs/identity.md). The local identity provider is a
 development simulation, not production SSO or healthcare compliance
 infrastructure.
+
+## Phase 7A local deployment hardening
+
+The reproducible local stack is documented in [docs/deployment.md](docs/deployment.md).
+Use `make platform-up` for the full Compose profile, `make verify-platform` for
+bounded service checks, and `make platform-down` for a non-destructive stop.
+The stack is synthetic-data-only and not clinically validated. Ollama remains
+host-based on Apple Silicon; no model files or credentials are copied into
+images.

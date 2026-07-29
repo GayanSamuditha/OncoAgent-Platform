@@ -198,3 +198,13 @@ user, explicit permissions, synthetic dataset grants, and reviewer assignments.
 This authorization layer precedes workflow, evidence, audit, and Temporal
 review operations. Browser credentials are not forwarded to MCP; MCP keeps its
 separate service principal and policy boundary.
+
+## Phase 7A reproducible local deployment
+
+The Compose stack separates application PostgreSQL from Temporal PostgreSQL.
+Application migrations, Temporal schema updates, and namespace registration are
+explicit one-shot jobs with health-gated dependencies. Core services are
+unprofiled; Temporal, observability, and evaluation services are enabled by
+`temporal`, `observability`, `evaluation`, or `full` profiles. Ollama remains a
+host service on Apple Silicon. Images use multi-stage builds and non-root
+runtime users; configuration validation rejects unsafe non-local defaults.

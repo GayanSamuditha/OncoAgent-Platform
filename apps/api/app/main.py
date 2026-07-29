@@ -12,6 +12,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from app.api.routes import router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.runtime_config import validate_runtime_settings
 from app.observability.metrics import (
     ACTIVE_REQUESTS,
     HTTP_DURATION,
@@ -28,6 +29,10 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
+    issues = validate_runtime_settings(settings, service="api")
+    if issues:
+        details = "; ".join(f"{issue.field}: {issue.reason}" for issue in issues)
+        raise RuntimeError(f"invalid runtime configuration: {details}")
     configure_logging(settings.log_level)
     configure(settings)
     try:

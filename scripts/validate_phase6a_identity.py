@@ -23,9 +23,9 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "api"))
 
-from app.core.config import get_settings  # noqa: E402
-from app.db.session import SessionLocal  # noqa: E402
-from app.models.identity import DatasetGrant, User  # noqa: E402
+from app.core.config import get_settings
+from app.db.session import SessionLocal
+from app.models.identity import DatasetGrant, User
 
 BASE_URL = os.environ.get("PHASE6A_API_URL", "http://127.0.0.1:8000").rstrip("/")
 WEB_ORIGIN = os.environ.get("PHASE6A_WEB_ORIGIN", "http://localhost:3000")
@@ -356,7 +356,7 @@ def main() -> int:
             add("Review authorization", {**expect(clients["researcher-console"], f"/api/v1/crews/oncology-research/runs/{run_id}/review", 200), "name": "creator can inspect review"})
             add("Review authorization", {**expect(clients["researcher-console"], f"/api/v1/crews/oncology-research/runs/{run_id}/review", 403, method="POST", origin=True, body={"decision": "accept_for_synthetic_research", "comment": "self approval probe"}), "name": "self approval denied"})
             add("Review authorization", {**expect(clients["reviewer-console"], f"/api/v1/crews/oncology-research/runs/{run_id}/review", 200), "name": "assigned reviewer can inspect"})
-            review_code, review_body = call(clients["reviewer-console"], f"/api/v1/crews/oncology-research/runs/{run_id}/review", "POST", {"decision": "accept_for_synthetic_research", "comment": "Synthetic development review."}, origin=True)
+            review_code, _review_body = call(clients["reviewer-console"], f"/api/v1/crews/oncology-research/runs/{run_id}/review", "POST", {"decision": "accept_for_synthetic_research", "comment": "Synthetic development review."}, origin=True)
             add("Review authorization", {"name": "assigned reviewer approval", "expected": 200, "actual": review_code, "passed": review_code == 200})
             final = wait_crew(clients["researcher-console"], run_id, {"accepted", "completed", "rejected", "cancelled", "failed"})
             add("Review authorization", {"name": "reviewed run terminal", "expected": True, "actual": final["body"].get("status") if isinstance(final.get("body"), dict) else None, "passed": final["body"].get("status") in {"accepted", "completed"} if isinstance(final.get("body"), dict) else False})

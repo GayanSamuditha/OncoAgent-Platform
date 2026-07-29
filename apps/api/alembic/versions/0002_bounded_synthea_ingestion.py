@@ -11,8 +11,27 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # The model metadata is the single source of truth for this additive foundation schema.
-    Base.metadata.create_all(bind=op.get_bind(), checkfirst=True)
+    # Only create the ingestion tables owned by this revision.  Importing the
+    # complete model registry here would also create tables introduced by
+    # later revisions, causing those revisions to fail on a clean database.
+    ingestion_tables = [
+        "datasets",
+        "patients",
+        "conditions",
+        "observations",
+        "procedures",
+        "medication_requests",
+        "diagnostic_reports",
+        "imaging_studies",
+        "encounters",
+        "fhir_resources",
+        "ingestion_runs",
+    ]
+    Base.metadata.create_all(
+        bind=op.get_bind(),
+        tables=[Base.metadata.tables[name] for name in ingestion_tables],
+        checkfirst=True,
+    )
 
 
 def downgrade() -> None:
