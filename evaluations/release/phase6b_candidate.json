@@ -1,0 +1,18 @@
+{
+  "candidate_id": "oncoagent-platform",
+  "candidate_version": "phase6b-local",
+  "baseline_id": "phase4d",
+  "baseline_version": "phase4d-v1",
+  "dataset_id": "6b15ce38-e12c-4482-866e-59d333952024",
+  "framework_versions": {"langgraph": "current", "crewai": "1.15.7"},
+  "model_versions": {"planner": "administrator-selected-local", "crewai": "llama3.2:3b"},
+  "retrieval_profiles": ["medcpt", "bioclinicalbert", "postgres_fts"],
+  "workflow_version": "phase3a-v1",
+  "mcp_tool_registry_version": "phase4a-v1",
+  "governance_taxonomy_version": "phase4d-governance-v1",
+  "resilience_registry_version": "phase5c-v1",
+  "identity_policy_version": "phase6a-v1",
+  "evaluation_suite_version": "phase6b-release-suite-v1",
+  "metrics_file": "evaluation_outputs/release/candidate_metrics.json",
+  "limitations": ["Candidate runtime measurements must be supplied by the release runner; metadata alone is not evidence."]
+}

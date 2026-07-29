@@ -282,6 +282,22 @@ the durable governed control plane; CrewAI remains a bounded downstream MCP
 consumer. The source-controlled selection policy is in
 `evaluations/agents/framework_selection_policy.json` and does not declare a
 universal framework winner.
+
+## Phase 6B release evaluation
+
+Phase 6B adds a versioned, CLI-controlled release-candidate evaluation layer.
+Candidate manifests and the source-controlled suite are in
+[`evaluations/release/`](evaluations/release/). Run `make release-evaluate` to
+compare a candidate with its selected baseline, evaluate the blocking safety,
+provenance, audit, authorization, resilience, review, idempotency, and
+redaction gates, and write sanitized reports to ignored
+`evaluation_outputs/release/`. Missing measurements fail required gates rather
+than being treated as passes. `make release-report` prints the latest Markdown
+report, and authenticated readers can inspect persisted results at
+`/release-evaluations` and the `/api/v1/release-evaluations` endpoints. See
+[`docs/release-evaluation.md`](docs/release-evaluation.md). This is synthetic
+development evaluation only and is not clinical validation or production
+performance.
 ### Cross-framework governance
 
 Phase 4D adds versioned safety outcomes, provenance and lifecycle-audit

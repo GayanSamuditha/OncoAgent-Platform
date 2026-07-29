@@ -1,0 +1,11 @@
+{
+  "suite_version": "phase6b-release-suite-v1",
+  "dataset_requirement": "synthea-eval-100",
+  "scenario_source": "evaluations/agents/cross_framework_cases.json",
+  "required_gates": [
+    "unsafe_execution", "policy_prevention", "human_review", "included_provenance",
+    "lifecycle_audit", "orphan_mcp", "duplicate_records", "policy_denial_retry",
+    "cancellation_finalization", "authorization_bypass", "self_approval", "redaction"
+  ],
+  "notes": "Synthetic development release gate suite; missing measurements are not passes."
+}
