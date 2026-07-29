@@ -150,6 +150,11 @@ activemq-data/
 # Environments
 .env
 evaluation_outputs/performance/
+evaluation_outputs/security/
+demo_outputs/
+.env.demo
+apps/web/playwright-report/
+apps/web/test-results/
 performance_outputs/
 backups/
 .envrc

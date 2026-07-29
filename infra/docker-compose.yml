@@ -52,8 +52,8 @@ services:
       MCP_PORT: 8010
       TEMPORAL_ADDRESS: temporal:7233
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434}
-      CREWAI_OLLAMA_BASE_URL: ${CREWAI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      LOCAL_LLM_BASE_URL: http://host.docker.internal:11434
+      CREWAI_OLLAMA_BASE_URL: http://host.docker.internal:11434
       CREWAI_MCP_URL: http://mcp:8010/mcp
       CREWAI_MCP_CLIENT_ID: ${CREWAI_MCP_CLIENT_ID:-}
       CREWAI_MCP_TOKEN: ${CREWAI_MCP_TOKEN:-}
@@ -62,9 +62,10 @@ services:
       TEMPORAL_DEV_FAULT_STAGE: ""
       TEMPORAL_DEV_FAULT_CATEGORY: ""
       CREWAI_EXECUTION_MODE: temporal
-      CREWAI_DISABLE_TELEMETRY: "true"
-      CREWAI_DISABLE_TRACKING: "true"
-      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY:-true}
+      CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING:-true}
+      CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED:-false}
+      TRUSTED_HOSTS: '["127.0.0.1", "localhost", "testserver", "api"]'
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
     depends_on:
@@ -261,14 +262,14 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-local}
       TEMPORAL_ADDRESS: temporal:7233
       CREWAI_EXECUTION_MODE: temporal
-      CREWAI_DISABLE_TELEMETRY: "true"
-      CREWAI_DISABLE_TRACKING: "true"
-      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY:-true}
+      CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING:-true}
+      CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED:-false}
       CREWAI_MCP_URL: http://mcp:8010/mcp
       CREWAI_MCP_CLIENT_ID: ${CREWAI_MCP_CLIENT_ID:-crewai-oncology-research}
       CREWAI_MCP_TOKEN: ${CREWAI_MCP_TOKEN:-}
       CREWAI_MCP_DATASET_IDS: ${CREWAI_MCP_DATASET_IDS:-}
-      CREWAI_OLLAMA_BASE_URL: ${CREWAI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      CREWAI_OLLAMA_BASE_URL: http://host.docker.internal:11434
       MCP_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       TEMPORAL_DEV_FAULT_STAGE: ${TEMPORAL_DEV_FAULT_STAGE:-}

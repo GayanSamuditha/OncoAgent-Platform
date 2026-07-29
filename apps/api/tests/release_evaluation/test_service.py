@@ -51,3 +51,46 @@ def test_missing_baseline_is_explicit_and_does_not_create_a_delta() -> None:
     assert latency.value is None
     assert latency.baseline_value is None
     assert latency.delta is None
+
+
+def test_security_evidence_is_a_blocking_release_extension() -> None:
+    evidence = {
+        name: {"status": "measured", "value": 0.0}
+        for name in (
+            "confirmed_secret_leakage",
+            "authorization_bypass",
+            "self_approval_success",
+            "dataset_boundary_bypass",
+            "browser_credential_propagation",
+            "unsafe_tool_execution",
+            "critical_dependency_vulnerabilities",
+            "critical_container_vulnerabilities",
+            "audit_integrity_failures",
+            "telemetry_privacy_leakage",
+        )
+    }
+    evidence["security_assessment_completed"] = {"status": "measured", "value": 1.0}
+    report = evaluate_candidate(
+        candidate(),
+        {**passing_metrics(), "security_metrics": evidence},
+        None,
+        baseline_reference={"available": False},
+    )
+    assert all(gate.passed for gate in report.gates if gate.name in evidence)
+
+
+def test_security_evidence_unavailable_blocks_without_inference() -> None:
+    report = evaluate_candidate(
+        candidate(),
+        {
+            **passing_metrics(),
+            "security_metrics": {
+                "critical_dependency_vulnerabilities": {"status": "not_evaluable"}
+            },
+        },
+        None,
+        baseline_reference={"available": False},
+    )
+    gate = next(gate for gate in report.gates if gate.name == "critical_dependency_vulnerabilities")
+    assert gate.status == "not_evaluable"
+    assert report.decision == "blocked"

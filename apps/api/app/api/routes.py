@@ -51,6 +51,7 @@ from app.models.release_evaluation import (
     ReleaseMetricResult,
 )
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
+from app.models.security import SecurityAssessmentRecord, SecurityFindingRecord
 from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
 from app.observability.metrics import (
     PERFORMANCE_OVERLOAD_REJECTIONS,
@@ -94,6 +95,9 @@ from app.schemas.retrieval import (
     ClinicalSearchResult,
     ModelStatusResponse,
 )
+from app.security.audit_integrity import verify_audit_chain
+from app.security.policy import SECURITY_GATE_DEFINITIONS, SECURITY_POLICY_VERSION
+from app.security.retention import dry_run_retention
 from app.services.crewai import _event
 from app.services.crewai import cancel_run as cancel_crewai_run
 from app.services.crewai import create_run as create_crewai_run
@@ -1613,6 +1617,118 @@ def planner_smoke_test(
         "prompt_id": "qwen_cohort_planning",
         "prompt_version": "phase3b-planner-v1",
         "prompt_length": len(PLANNING_SYSTEM_PROMPT),
+    }
+
+
+@router.get("/api/v1/security/policy")
+def security_policy(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_policy_read")
+    return {
+        "policy_version": SECURITY_POLICY_VERSION,
+        "severity_levels": ["informational", "low", "medium", "high", "critical"],
+        "finding_states": [
+            "open",
+            "accepted_risk",
+            "remediated",
+            "false_positive",
+            "not_applicable",
+        ],
+        "blocking_gates": SECURITY_GATE_DEFINITIONS,
+        "scanner_unavailable": "not_evaluable; never inferred as passed",
+        "limitations": [
+            "Local synthetic development readiness; not HIPAA or production certification."
+        ],
+    }
+
+
+@router.get("/api/v1/security/assessments")
+def security_assessments(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_assessments_read")
+        items = [
+            _safe_model(item)
+            for item in session.scalars(
+                select(SecurityAssessmentRecord).order_by(
+                    SecurityAssessmentRecord.created_at.desc()
+                )
+            ).all()
+        ]
+    return {"items": items, "count": len(items), "policy_version": SECURITY_POLICY_VERSION}
+
+
+@router.get("/api/v1/security/assessments/{assessment_id}")
+def security_assessment(
+    assessment_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_assessment_read")
+        item = session.scalar(
+            select(SecurityAssessmentRecord).where(
+                SecurityAssessmentRecord.assessment_id == assessment_id
+            )
+        )
+        if item is None:
+            raise HTTPException(status_code=404, detail="security assessment not found")
+        findings = session.scalars(
+            select(SecurityFindingRecord).where(SecurityFindingRecord.assessment_id == item.id)
+        ).all()
+        result = _safe_model(item)
+        result["findings"] = [_safe_model(finding) for finding in findings]
+    return result
+
+
+@router.get("/api/v1/security/findings")
+def security_findings(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_findings_read")
+        items = [
+            _safe_model(item)
+            for item in session.scalars(
+                select(SecurityFindingRecord).order_by(SecurityFindingRecord.severity.asc())
+            ).all()
+        ]
+    return {"items": items, "count": len(items), "sensitive_scanner_output_excluded": True}
+
+
+@router.get("/api/v1/security/audit-integrity")
+def security_audit_integrity(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_audit_integrity_read")
+        result = verify_audit_chain(session)
+    return result.model_dump(mode="json")
+
+
+@router.get("/api/v1/security/retention")
+def security_retention(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "audit:read", session, action="security_retention_read")
+    return dry_run_retention()
+
+
+@router.get("/api/v1/security/incident-readiness")
+def security_incident_readiness(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(
+            actor, "audit:read", session, action="security_incident_readiness_read"
+        )
+    checks = [
+        "credential_exposure",
+        "dataset_access",
+        "audit_integrity",
+        "dependency_vulnerability",
+        "prompt_injection",
+        "worker_compromise",
+        "database_compromise",
+        "backup_exposure",
+        "denial_of_service",
+    ]
+    return {
+        "status": "documented",
+        "checks": [{"scenario": item, "status": "documented"} for item in checks],
+        "limitations": [
+            "No staffed incident response team or production contact details are claimed."
+        ],
     }
 
 

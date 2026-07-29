@@ -372,3 +372,11 @@ under `evaluation_outputs/performance/`; see [docs/performance.md](docs/performa
 Measurements use synthetic data and local hardware and are not clinical,
 production-capacity, or certification evidence. Correctness controls remain
 blocking while latency is informational by default.
+## Security and privacy readiness
+
+Phase 7C adds local, versioned security evidence under `docs/security.md`.
+Run `make security-scan`, `make privacy-scan`, `make audit-integrity-verify`,
+and `make retention-dry-run`. Missing external scanners are reported as
+`not_evaluable`; no scanner result is inferred as a pass. The platform uses
+synthetic Synthea data only and is not HIPAA-certified, clinically validated,
+or production security-certified.

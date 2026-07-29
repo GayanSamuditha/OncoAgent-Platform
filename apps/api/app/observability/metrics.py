@@ -170,6 +170,40 @@ PERFORMANCE_RECOVERY_TIME = _histogram(
 PERFORMANCE_SLO_STATUS = _gauge(
     "oncoagent_performance_slo_status", "Development SLO status", ("slo", "status")
 )
+SECURITY_AUTH_FAILURES = _counter(
+    "oncoagent_security_authentication_failures_total", "Authentication failures", ("reason",)
+)
+SECURITY_AUTHZ_DENIALS = _counter(
+    "oncoagent_security_authorization_denials_total", "Authorization denials", ("reason",)
+)
+SECURITY_DATASET_DENIALS = _counter(
+    "oncoagent_security_dataset_denials_total", "Dataset authorization denials"
+)
+SECURITY_SELF_APPROVAL_DENIALS = _counter(
+    "oncoagent_security_self_approval_denials_total", "Self approval denials"
+)
+SECURITY_CSRF_DENIALS = _counter("oncoagent_security_csrf_denials_total", "CSRF denials")
+SECURITY_SECRET_FINDINGS = _gauge(
+    "oncoagent_security_secret_scan_findings", "Sanitized secret scan findings"
+)
+SECURITY_DEPENDENCY_FINDINGS = _gauge(
+    "oncoagent_security_dependency_findings", "Dependency findings by severity", ("severity",)
+)
+SECURITY_PRIVACY_VIOLATIONS = _counter(
+    "oncoagent_security_privacy_violations_total", "Privacy boundary violations", ("category",)
+)
+SECURITY_AUDIT_INTEGRITY_FAILURES = _gauge(
+    "oncoagent_security_audit_integrity_failures", "Audit integrity failures"
+)
+SECURITY_ASSESSMENT_STATUS = _gauge(
+    "oncoagent_security_assessment_status", "Security assessment status", ("status",)
+)
+SECURITY_PROMPT_INJECTION_PREVENTED = _counter(
+    "oncoagent_security_prompt_injection_prevented_total", "Prompt injection attempts prevented"
+)
+SECURITY_TOOL_DENIALS = _counter(
+    "oncoagent_security_tool_authorization_denials_total", "Tool authorization denials", ("reason",)
+)
 
 
 def observe(metric: Any, value: float = 1.0, labels: dict[str, str] | None = None) -> None:

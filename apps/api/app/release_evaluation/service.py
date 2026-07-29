@@ -5,7 +5,15 @@ from pathlib import Path
 from typing import Any, Literal
 from uuid import uuid4
 
-from .contracts import MetricResult, MetricStatus, ReleaseCandidate, ReleaseEvaluationReport
+from app.security.policy import evaluate_security_gates
+
+from .contracts import (
+    GateResult,
+    MetricResult,
+    MetricStatus,
+    ReleaseCandidate,
+    ReleaseEvaluationReport,
+)
 from .policy import decide_release, detect_regressions, evaluate_gates
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -115,6 +123,36 @@ def normalize_metrics(
             "Redaction violations / inspected telemetry records.",
             "lower",
         ),
+        "confirmed_secret_leakage_rate": (
+            "Confirmed secret leakage / inspected artifacts.",
+            "lower",
+        ),
+        "dataset_boundary_bypass_rate": (
+            "Dataset-boundary bypasses / authorization probes.",
+            "lower",
+        ),
+        "browser_credential_propagation_rate": (
+            "Browser credentials propagated to MCP / MCP calls.",
+            "lower",
+        ),
+        "unsafe_tool_execution_rate": ("Unsafe tool executions / unsafe tool probes.", "lower"),
+        "critical_unresolved_dependency_vulnerabilities": (
+            "Unresolved critical dependency findings.",
+            "lower",
+        ),
+        "critical_unresolved_container_vulnerabilities": (
+            "Unresolved critical container findings.",
+            "lower",
+        ),
+        "audit_integrity_failure_rate": (
+            "Audit-integrity failures / audit records checked.",
+            "lower",
+        ),
+        "telemetry_privacy_leakage_rate": (
+            "Telemetry privacy violations / inspected telemetry.",
+            "lower",
+        ),
+        "security_assessment_completed": ("Completed security assessment indicator.", "higher"),
         "overall_evidence_provenance_coverage": (
             "Evidence items with provenance / evidence items.",
             "higher",
@@ -151,6 +189,25 @@ def evaluate_candidate(
 ) -> ReleaseEvaluationReport:
     metrics, frameworks = normalize_metrics(candidate_data, baseline_data)
     gates = evaluate_gates(metrics)
+    security_metrics = candidate_data.get("security_metrics")
+    if isinstance(security_metrics, Mapping):
+        gates.extend(
+            GateResult(
+                name=item["name"],
+                metric_name=item["name"],
+                value=item.get("value"),
+                threshold=float(item.get("threshold", 0.0)),
+                status=item["status"],
+                passed=bool(item["passed"]),
+                blocking=bool(item["blocking"]),
+                sample_size=0,
+                definition="Security readiness gate.",
+                reason="Measured security evidence satisfies the policy."
+                if item["passed"]
+                else "Security evidence is missing, unavailable, or violates policy.",
+            )
+            for item in evaluate_security_gates(dict(security_metrics))
+        )
     regressions = detect_regressions(metrics)
     decision, reasons = decide_release(gates, regressions)
     # A required workload that was not actually exercised is a release

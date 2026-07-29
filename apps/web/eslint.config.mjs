@@ -1,5 +1,5 @@
 import nextVitals from "eslint-config-next/core-web-vitals";
 
-const eslintConfig = [...nextVitals];
+const eslintConfig = [{ ignores: ["playwright-report/**", "test-results/**"] }, ...nextVitals];
 
 export default eslintConfig;

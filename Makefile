@@ -2,10 +2,10 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify db-up db-down observability-up observability-down migrate test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify security-verify retention-dry-run db-up db-down observability-up observability-down migrate demo-up demo-down demo-status demo-check demo-prepare demo-populate demo-populate-research demo-populate-operations demo-guided demo-auto demo-record demo-report demo-reset test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
 
 help:
-	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify check'
+	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify retention-dry-run security-verify check'
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -70,6 +70,26 @@ performance-report:
 reliability-verify:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/performance_runner.py --profile retry-recovery
 
+security-scan:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check all
+
+secret-scan:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check secrets
+
+dependency-scan:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check dependencies
+
+privacy-scan:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check privacy
+
+audit-integrity-verify:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/audit_integrity_verify.py
+
+retention-dry-run:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_retention.py
+
+security-verify: secret-scan privacy-scan audit-integrity-verify retention-dry-run
+
 db-up:
 	docker compose -f infra/docker-compose.yml up -d
 
@@ -84,6 +104,51 @@ observability-down:
 
 migrate:
 	cd $(API_DIR) && .venv/bin/alembic upgrade head
+
+demo-prepare: migrate verify-data
+	@echo 'Demo prerequisites verified: existing bounded synthetic dataset and schema are ready.'
+	@echo 'No records are inserted or deleted by this target; use seed-synthetic only when a Synthea archive is explicitly provided.'
+
+demo-up:
+	@test -f .env.demo || cp .env.demo.example .env.demo
+	docker compose --env-file .env.demo -f infra/docker-compose.yml --profile full up -d --build
+
+demo-down:
+	docker compose --env-file .env.demo -f infra/docker-compose.yml --profile full down
+
+demo-status:
+	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py status
+
+demo-check:
+	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py check
+
+demo-populate:
+	@if [ -n "$${DEMO_ID:-}" ]; then PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py populate --demo-id "$${DEMO_ID}"; else PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py populate; fi
+
+demo-populate-research:
+	@if [ -n "$${DEMO_ID:-}" ]; then PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py research --demo-id "$${DEMO_ID}"; else PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py research; fi
+
+demo-populate-operations:
+	@if [ -n "$${DEMO_ID:-}" ]; then PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py operations --demo-id "$${DEMO_ID}"; else PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py operations; fi
+
+demo-guided:
+	@echo 'Open http://localhost:3000/demo after demo-populate completes.'
+
+demo-auto: demo-check demo-prepare demo-populate
+
+demo-record:
+	@echo 'Browser recording requires the Playwright runner; no records are changed by this target.'
+
+demo-report:
+	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py report
+
+demo-reset:
+	@if [ -z "$${DEMO_ID:-}" ]; then echo 'Set DEMO_ID=client-demo-...'; exit 2; fi
+	@if [ "$${CONFIRM_DEMO_RESET:-}" = "YES" ]; then \
+		PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/demo_reset.py --demo-id "$${DEMO_ID}" --confirm; \
+	else \
+		PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/demo_reset.py --demo-id "$${DEMO_ID}"; \
+	fi
 
 validate-config:
 	PYTHONPATH=$(API_DIR) python3 scripts/validate_config.py --service api

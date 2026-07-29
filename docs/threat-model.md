@@ -1,5 +1,31 @@
 # Initial Threat Model
 
+## Phase 7C security-readiness scope
+
+Actors include unauthenticated users, researchers, reviewers, governance
+officers, auditors, operators, administrators, compromised browser sessions
+and service identities, malicious MCP clients, prompt-injection content,
+compromised local-model responses, database insiders, compromised containers,
+and dependency supply-chain attackers.
+
+Assets include identity and service credentials, dataset grants, synthetic
+FHIR data, workflow and Temporal state, approval and audit records, provenance
+evidence, prompts and outputs, release evidence, backups, MCP lineage, and
+telemetry. Boundaries are browser/API, API/PostgreSQL, API/Temporal,
+worker/MCP, MCP/PostgreSQL, services/Ollama, services/telemetry,
+container/host, and backup/restore.
+
+Application RBAC and dataset grants do not replace MCP authorization.
+Retrieved content is untrusted data; structured verification, tool schemas,
+allowlists, provenance, and human review remain authoritative. Implemented
+controls include centralized permissions, reviewer separation of duties,
+CSRF Origin validation, bounded concurrency/request limits, redacted
+telemetry, non-root images, isolated Temporal persistence, and audit-chain
+verification for new access decisions. Scanner availability and historical
+audit records are reported as `not_evaluable` or `legacy_unverified`, never
+silently passed. Local identity, HTTP, host Ollama, synthetic data, and the
+absence of an external immutable ledger are development limitations.
+
 | Threat | Control in Phase 0 | Future control |
 | --- | --- | --- |
 | Raw Synthea data accidentally committed | Explicit Git ignores and project rules | CI artifact scanning |

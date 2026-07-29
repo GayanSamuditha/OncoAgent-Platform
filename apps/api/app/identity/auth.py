@@ -7,6 +7,7 @@ from fastapi import Depends, Header, HTTPException, Request
 from app.core.config import Settings, get_settings
 from app.db.session import SessionLocal
 from app.identity.service import AuthenticatedUser, authenticate_request, ensure_local_user
+from app.observability.metrics import SECURITY_CSRF_DENIALS, observe
 
 
 def current_user(request: Request, settings: Settings = Depends(get_settings)) -> AuthenticatedUser:
@@ -28,8 +29,16 @@ def development_actor(
         try:
             return authenticate_request(request, session, settings)
         except HTTPException:
-            has_token = bool(request.headers.get("authorization") or request.cookies.get(settings.identity_session_cookie))
-            if settings.identity_legacy_headers_enabled and settings.environment == "local" and x_actor_id and not has_token:
+            has_token = bool(
+                request.headers.get("authorization")
+                or request.cookies.get(settings.identity_session_cookie)
+            )
+            if (
+                settings.identity_legacy_headers_enabled
+                and settings.environment == "local"
+                and x_actor_id
+                and not has_token
+            ):
                 return ensure_local_user(session, settings, x_actor_id)
             raise
 
@@ -59,8 +68,11 @@ def identity_guard(
     # local application origin.  SameSite=Lax is retained as a second layer;
     # this Origin check prevents cross-site form/fetch requests from using a
     # browser session.  Bearer clients are not subject to browser CSRF.
-    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.cookies.get(settings.identity_session_cookie):
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.cookies.get(
+        settings.identity_session_cookie
+    ):
         origin = request.headers.get("origin")
         if origin not in settings.cors_origins:
+            observe(SECURITY_CSRF_DENIALS)
             raise HTTPException(status_code=403, detail="CSRF origin validation failed")
     return development_actor(request, settings, x_actor_id)

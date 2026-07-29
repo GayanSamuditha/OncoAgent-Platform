@@ -19,6 +19,12 @@ the built-in development profiles). Roles are never taken from browser
 arguments. The legacy `X-Actor-Id` bridge remains enabled only for local
 development and ignores `X-Actor-Role`; set
 `IDENTITY_LEGACY_HEADERS_ENABLED=false` to require sessions or bearer tokens.
+
+Local HTTP uses `HttpOnly` and `SameSite=Lax` cookies but leaves `Secure=false`
+because browsers do not send Secure cookies over plain HTTP. An HTTPS
+deployment must set `IDENTITY_COOKIE_SECURE=true` and
+`SECURITY_HSTS_ENABLED=true`; this local configuration is not a production
+identity provider or federation.
 Cookie-authenticated state-changing requests also require a configured local
 `Origin`; this is the development CSRF defense layered with `HttpOnly` and
 `SameSite=Lax` cookies. Bearer clients are not browser-cookie requests.

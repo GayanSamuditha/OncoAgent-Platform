@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "demo:record": "DEMO_RECORD=1 playwright test tests/demo.spec.ts --trace on",
+    "demo:capture": "node scripts/capture-demo.mjs"
   },
   "dependencies": {
     "next": "^16.2.12",
@@ -14,6 +17,7 @@
     "react-dom": "19.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/node": "22.10.5",
     "@types/react": "19.0.3",
     "@types/react-dom": "19.0.2",

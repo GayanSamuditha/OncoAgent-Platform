@@ -247,8 +247,19 @@ class Settings(BaseSettings):
         "administrator",
     ]
     identity_legacy_headers_enabled: bool = Field(
-        default=True, validation_alias="IDENTITY_LEGACY_HEADERS_ENABLED"
+        default=False, validation_alias="IDENTITY_LEGACY_HEADERS_ENABLED"
     )
+    trusted_hosts: list[str] = Field(
+        default=["127.0.0.1", "localhost", "testserver"], validation_alias="TRUSTED_HOSTS"
+    )
+    security_headers_enabled: bool = Field(
+        default=True, validation_alias="SECURITY_HEADERS_ENABLED"
+    )
+    security_hsts_enabled: bool = Field(default=False, validation_alias="SECURITY_HSTS_ENABLED")
+    request_max_body_bytes: int = Field(
+        default=1048576, ge=1024, le=10485760, validation_alias="REQUEST_MAX_BODY_BYTES"
+    )
+    api_docs_enabled: bool = Field(default=True, validation_alias="API_DOCS_ENABLED")
     performance_enabled: bool = Field(default=True, validation_alias="PERFORMANCE_ENABLED")
     performance_max_concurrency: int = Field(
         default=8, ge=1, le=32, validation_alias="PERFORMANCE_MAX_CONCURRENCY"

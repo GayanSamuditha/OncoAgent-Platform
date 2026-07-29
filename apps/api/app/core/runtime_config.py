@@ -34,6 +34,10 @@ def validate_runtime_settings(settings: Settings, *, service: str = "api") -> li
             )
         if settings.temporal_dev_fault_stage or settings.temporal_dev_fault_category:
             issues.append(ConfigIssue("TEMPORAL_DEV_FAULT_*", "fault injection is local/test only"))
+        if not settings.identity_cookie_secure:
+            issues.append(ConfigIssue("IDENTITY_COOKIE_SECURE", "must be true outside local/test"))
+        if settings.security_hsts_enabled is False:
+            issues.append(ConfigIssue("SECURITY_HSTS_ENABLED", "must be true outside local/test"))
     if settings.temporal_enabled:
         if not settings.temporal_address:
             issues.append(ConfigIssue("TEMPORAL_ADDRESS", "is required when Temporal is enabled"))

@@ -1,4 +1,26 @@
 groups:
+  - name: oncoagent-security
+    rules:
+      - alert: OncoAgentAuthorizationBypass
+        expr: increase(oncoagent_security_authorization_denials_total{reason="bypass"}[5m]) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Authorization bypass signal detected"}
+      - alert: OncoAgentAuditIntegrityFailure
+        expr: oncoagent_security_audit_integrity_failures > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Audit integrity verification failed"}
+      - alert: OncoAgentPrivacyViolation
+        expr: increase(oncoagent_security_privacy_violations_total[5m]) > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Privacy boundary violation detected"}
+      - alert: OncoAgentSecretFinding
+        expr: oncoagent_security_secret_scan_findings > 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: "Sanitized secret scan finding detected"}
   - name: oncoagent-development
     rules:
       - alert: OncoAgentApiErrors
