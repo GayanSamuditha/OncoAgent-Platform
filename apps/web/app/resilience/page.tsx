@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 type Json = Record<string, unknown>;
 
 export default function ResiliencePage() {
@@ -12,8 +12,8 @@ export default function ResiliencePage() {
   const [error, setError] = useState(false);
   useEffect(() => {
     Promise.all([
-      fetch(`${apiBase}/api/v1/resilience/certifications`, { headers: { "X-Actor-Id": "resilience-console", "X-Actor-Role": "admin" }, cache: "no-store" }).then((r) => r.json()),
-      fetch(`${apiBase}/api/v1/resilience/scenarios`, { headers: { "X-Actor-Id": "resilience-console", "X-Actor-Role": "admin" }, cache: "no-store" }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/resilience/certifications`, { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/resilience/scenarios`, { credentials: "include", cache: "no-store" }).then((r) => r.json()),
     ]).then(([reports, scenarios]) => { setData(reports); setCatalog(scenarios); }).catch(() => setError(true));
   }, []);
   const reports = (data?.items ?? []) as Json[];

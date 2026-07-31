@@ -92,7 +92,7 @@ async def login(client: httpx.AsyncClient, user_key: str) -> bool:
     response = await client.post(
         "/api/v1/auth/login",
         json={"user_key": user_key},
-        headers={"Origin": os.getenv("PERFORMANCE_ORIGIN", "http://localhost:3000")},
+        headers={"Origin": os.getenv("PERFORMANCE_ORIGIN", "http://127.0.0.1:3000")},
     )
     return response.status_code == 200
 
@@ -414,7 +414,7 @@ async def _run_adapter(base_url: str, profile_id: str, profile: Any) -> AdapterR
         return await _run_mcp(profile)
     if profile_id == "model-saturation":
         return await _run_model(profile)
-    async with httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=profile.timeout_seconds, headers={"Origin": os.getenv("PERFORMANCE_ORIGIN", "http://localhost:3000")}) as client:
+    async with httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=profile.timeout_seconds, headers={"Origin": os.getenv("PERFORMANCE_ORIGIN", "http://127.0.0.1:3000")}) as client:
         if profile_id == "langgraph-cohort":
             return await _run_langgraph(client, profile)
         if profile_id == "crewai-temporal":

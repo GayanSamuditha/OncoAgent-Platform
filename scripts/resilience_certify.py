@@ -7,6 +7,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from http.cookiejar import CookieJar
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -21,13 +22,28 @@ from app.resilience.validators import (
 from temporalio.client import Client
 
 
+_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(CookieJar()))
+
+
 def _get(base: str, path: str, actor: str = "resilience-certifier") -> dict:
     request = urllib.request.Request(
         f"{base.rstrip('/')}{path}",
         headers={"X-Actor-Id": actor, "X-Actor-Role": "admin"},
     )
-    with urllib.request.urlopen(request, timeout=15) as response:
+    with _opener.open(request, timeout=15) as response:
         return json.loads(response.read())
+
+
+def _login(base: str) -> None:
+    request = urllib.request.Request(
+        f"{base.rstrip('/')}/api/v1/auth/login",
+        data=json.dumps({"user_key": "admin-console"}).encode(),
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    with _opener.open(request, timeout=15) as response:
+        if response.status != 200:
+            raise RuntimeError("resilience certifier login failed")
 
 
 def observe_run(base: str, scenario_id: str, run_id: str, certification_id: str) -> CertificationObservation:
@@ -115,6 +131,7 @@ def main() -> int:
     parser.add_argument("--api-base", default="http://127.0.0.1:8000")
     parser.add_argument("--certification-id", default=f"resilience-{uuid4()}")
     args = parser.parse_args()
+    _login(args.api_base)
     registry = {item.scenario_id: item for item in resilience_scenarios()}
     selected = args.scenarios or list(registry)
     if any(item not in registry for item in selected):

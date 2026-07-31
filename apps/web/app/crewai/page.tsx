@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 type Json = Record<string, unknown>;
 
 export default function CrewAIPage() {

@@ -1,374 +1,508 @@
 # OncoAgent Platform
 
-OncoAgent Platform is an enterprise-style foundation for governed agentic AI workflows over synthetic Synthea healthcare data. It is designed as a portfolio project for regulated healthcare machine-learning engineering. The project is not clinically validated and must not be used for clinical decisions.
+**A governed, multi-framework agentic AI platform for synthetic oncology research workflows** — engineered to demonstrate the controls a regulated AI system actually needs in production: deterministic policy gates, mandatory human review, durable execution, cross-framework evaluation, full observability, and an append-only audit trail that survives a framework swap.
 
-## Current status
+Two independent agent frameworks (LangGraph and CrewAI) are implemented, benchmarked head-to-head on identical scenarios, and constrained by the *same* non-negotiable boundary — a governed MCP tool gateway and a human-review gate — so the choice of framework never becomes a safety decision.
 
-Phase 1 through Phase 4B are implemented in bounded local form: deterministic clinical documents, model-agnostic retrieval, hybrid retrieval evaluation, a persistent LangGraph cohort workflow, optional local planner selection through Ollama, a separate governed MCP tool gateway, and CrewAI as a downstream MCP-only oncology research client. These models and planners are not clinical decision-makers and are not clinically validated. Cohort export, RAG generation, and deferred orchestration frameworks are not implemented.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)](apps/api/pyproject.toml)
+[![Next.js 16](https://img.shields.io/badge/next.js-16-black?logo=next.js&logoColor=white)](apps/web/package.json)
+[![Security readiness](https://github.com/GayanSamuditha/OncoAgent-Platform/actions/workflows/security.yml/badge.svg)](https://github.com/GayanSamuditha/OncoAgent-Platform/actions/workflows/security.yml)
 
-Phase 2 smoke test:
+> **Scope note.** Every dataset is synthetic (Synthea-generated). This is a portfolio engineering project, not a medical device: nothing here is clinically validated, and no output should ever inform a real clinical decision. See [Disclaimers](#disclaimers--license).
 
-```bash
-apps/api/.venv/bin/python scripts/build_clinical_documents.py --dataset-id <dataset-id> --document-type encounter --limit 25
-apps/api/.venv/bin/python scripts/index_clinical_documents.py --dataset-id <dataset-id> --model emilyalsentzer/Bio_ClinicalBERT --batch-size 4 --limit 25
-apps/api/.venv/bin/python scripts/index_clinical_documents.py --dataset-id <dataset-id> --retrieval-provider medcpt --batch-size 4 --limit 25
-curl -X POST http://localhost:8000/api/v1/clinical-search -H 'content-type: application/json' -d '{"dataset_id":"<dataset-id>","query":"hypertension elevated blood pressure","top_k":5,"document_types":["encounter"]}'
+---
+
+## Table of contents
+
+1. [Highlights](#highlights)
+2. [Why this project exists](#why-this-project-exists)
+3. [System architecture](#system-architecture)
+4. [Governed multi-agent workflow — LangGraph](#governed-multi-agent-workflow--langgraph)
+5. [Multi-framework agent communication](#multi-framework-agent-communication)
+6. [Identity, governance & safety controls](#identity-governance--safety-controls)
+7. [Observability & operations](#observability--operations)
+8. [Resilience engineering](#resilience-engineering)
+9. [Quality engineering & test coverage](#quality-engineering--test-coverage)
+10. [Benchmarks & evaluations](#benchmarks--evaluations)
+11. [Technology stack](#technology-stack)
+12. [Repository layout](#repository-layout)
+13. [Getting started](#getting-started)
+14. [Roadmap](#roadmap)
+15. [Disclaimers & license](#disclaimers--license)
+
+---
+
+## Highlights
+
+| Capability | What was actually built |
+| --- | --- |
+| **Two governed agent frameworks** | A first-party LangGraph cohort workflow and a downstream CrewAI research crew, evaluated against the same 16-scenario suite rather than chosen by assumption |
+| **Zero-trust tool access** | Every agent — LangGraph or CrewAI — reaches clinical data through one MCP gateway exposing 10 read-only, versioned tools. No agent holds a database session, FHIR repository, or filesystem handle |
+| **Durable execution** | Temporal (`1.30.0` SDK / `1.31.2` server) coordinates the CrewAI lifecycle with typed, bounded retries and certified recovery across 16 fault scenarios |
+| **Human-in-the-loop by construction** | Every workflow — either framework — stops at an approval interrupt or `awaiting_human_review`; no agent can approve its own output |
+| **Identity & RBAC** | Local OIDC-compatible sessions, 6-role RBAC, synthetic dataset grants, reviewer separation-of-duties, and append-only SHA-256-chained access audit |
+| **Full observability** | OpenTelemetry → Tempo/Prometheus → 11 Grafana dashboards, correlated with workflow, MCP, and Temporal lineage |
+| **Versioned release gates** | A CLI-driven release-evaluation layer blocks unsafe, unprovenanced, or ungoverned candidates before they're considered "approved" |
+| **Verified quality bar** | 163 backend tests, zero lint/type findings across Python and TypeScript, and a clean production build — reverified 2026-07-30 (see [Quality engineering](#quality-engineering--test-coverage)) |
+| **100% synthetic data** | Every patient record traces back to a Synthea archive; the platform is explicitly and repeatedly labeled non-clinical |
+
+---
+
+## Why this project exists
+
+Most agentic-AI demos stop at "an agent that calls an LLM and does something useful." Regulated domains — healthcare, finance, insurance — need more than that before an agent touches real data:
+
+- **A decision made by a model is not a decision until a human approves it.** Every workflow here pauses for review; nothing self-finalizes.
+- **Framework choice must not be a safety decision.** LangGraph and CrewAI are evaluated on identical scenarios and constrained by the same tool boundary and audit contract, so swapping frameworks doesn't change what's allowed.
+- **Recovery must be provable, not assumed.** A durable orchestrator (Temporal) is certified against 16 concrete failure injections — worker crashes, transport failures, cancellations — with explicit recovery boundaries.
+- **Audit has to survive the stack it's watching.** Telemetry (traces/metrics) is best-effort; the append-only, hash-chained access and lineage tables are the record of truth, independent of whether observability infrastructure is even running.
+
+OncoAgent Platform builds all of that end to end — including the failure drills, the cross-framework benchmark, and the release gate that would block a regression — on synthetic oncology cohort research as the demonstration domain.
+
+---
+
+## System architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Client"]
+        Browser["Next.js 16 App Router (React 19)"]
+    end
+
+    subgraph ControlPlane["FastAPI control plane"]
+        API["FastAPI API"]
+        Identity["Identity & RBAC<br/>(local OIDC-compatible)"]
+        LangGraph["LangGraph governed<br/>cohort workflow"]
+    end
+
+    subgraph DurableExecution["Durable execution"]
+        Temporal["Temporal server<br/>(namespace: oncoagent)"]
+        Worker["Activity worker"]
+    end
+
+    subgraph AgentLayer["Downstream agent layer"]
+        CrewAI["CrewAI research crew<br/>(4 sequential agents)"]
+        Ollama[("Local Ollama<br/>qwen3:8b / llama3.2:3b")]
+    end
+
+    subgraph ToolBoundary["Governed tool boundary"]
+        MCP["MCP Gateway<br/>(10 read-only tools)"]
+    end
+
+    subgraph DataLayer["Data"]
+        Postgres[("PostgreSQL + pgvector")]
+    end
+
+    subgraph ObservabilityStack["Observability"]
+        Otel["OTel Collector"]
+        Tempo[("Tempo traces")]
+        Prom[("Prometheus metrics")]
+        Grafana["Grafana<br/>(11 dashboards)"]
+    end
+
+    Browser -->|same-origin proxy| API
+    API --> Identity
+    API --> LangGraph
+    API --> Temporal
+    Temporal --> Worker
+    Worker --> CrewAI
+    CrewAI --> Ollama
+    CrewAI --> MCP
+    LangGraph --> MCP
+    LangGraph --> Postgres
+    MCP --> Postgres
+    API --> Postgres
+    API --> Otel
+    Worker --> Otel
+    MCP --> Otel
+    Otel --> Tempo
+    Otel --> Prom
+    Tempo --> Grafana
+    Prom --> Grafana
 ```
 
-MedCPT uses `ncbi/MedCPT-Query-Encoder` for queries and `ncbi/MedCPT-Article-Encoder` for documents, CLS pooling, 64-token query input, and 512-token document input. BioClinicalBERT remains available as a separate mean-pooling comparison profile. PostgreSQL full-text search is the non-neural baseline. Search scores are ranking signals, not clinical probabilities. MedCPT’s PubMed-oriented training domain is a limitation for synthetic FHIR phrasing. Model weights, Hugging Face caches, generated embeddings, and evaluation outputs remain local-only and ignored by Git.
+**Component responsibilities:**
 
-Phase 2.6 adds `hybrid_bioclinicalbert` and `hybrid_medcpt`, using deterministic Reciprocal Rank Fusion with a documented constant of 60. `ncbi/MedCPT-Cross-Encoder` is an optional, bounded reranker over at most 50 candidates; its logits are ranking signals and are never treated as calibrated probabilities. The source-controlled 100-patient evaluation definition is generated from normalized Synthea facts. Run the comparative evaluation with:
+| Layer | Owns | Does not own |
+| --- | --- | --- |
+| FastAPI | Authn/authz, workflow admission, evidence/audit persistence | Clinical tool access, model inference |
+| LangGraph | Deterministic planning, structured FHIR verification, approval interrupts, PostgreSQL checkpoints | Durable retries across process restarts (that's Temporal's downstream slice) |
+| Temporal | CrewAI lifecycle durability, typed retries, heartbeats, cancellation, review-wait | Clinical data access, governance policy |
+| MCP Gateway | Tool authentication, dataset allowlists, retrieval policy, tool-call audit lineage | SQL, raw FHIR, filesystem, model selection, export, approval |
+| CrewAI | 4-agent sequential research synthesis | Any direct data access — MCP-only |
+| PostgreSQL | Application records, evidence, append-only audit, workflow checkpoints | — |
+| Observability stack | Best-effort tracing/metrics for operational insight | Authorization, audit-of-record |
 
-```bash
-DATABASE_URL=postgresql+psycopg://oncoagent:oncoagent_dev@localhost:55432/oncoagent \
-apps/api/.venv/bin/python scripts/evaluate_clinical_retrieval.py \
-  --dataset-id <100-patient-dataset-id> \
-  --evaluation-file evaluations/retrieval/phase2_6_cases.json
+Docker Compose profiles compose the same services for different needs: the unprofiled **core** stack (Postgres, API, MCP, web), **temporal** (adds Temporal server/UI/worker), **observability** (adds Collector/Prometheus/Tempo/Grafana), and **full** (everything). See [`docs/deployment.md`](docs/deployment.md).
+
+---
+
+## Governed multi-agent workflow — LangGraph
+
+The first-party workflow is a single persistent `StateGraph`, checkpointed in PostgreSQL, that treats semantic retrieval as *candidate generation only* — every inclusion criterion is re-verified against normalized structured FHIR facts before a human ever sees the case.
+
+```mermaid
+flowchart LR
+    A["Intake<br/>cohort request"] --> B["Plan<br/>deterministic or local Qwen planner"]
+    B --> C{"Schema valid?"}
+    C -- No --> R1["Rejected<br/>invalid plan"]
+    C -- Yes --> D["Policy precheck<br/>tool + dataset + criteria allowlist"]
+    D -- Unsafe --> R2["Rejected<br/>policy violation"]
+    D -- OK --> E["Bounded retrieval<br/>MedCPT → BioClinicalBERT → Postgres FTS"]
+    E --> F["Structured FHIR verification"]
+    F --> G["Evidence validation<br/>+ provenance capture"]
+    G --> H["Policy postcheck"]
+    H --> I["Idempotent approval prep"]
+    I --> J[["interrupt()<br/>pause for human reviewer"]]
+    J -- Approve --> K["Finalized<br/>audit lineage recorded"]
+    J -- Reject --> L["Rejected by reviewer"]
+    J -- Cancel --> M["Cancelled"]
 ```
 
-Machine-readable results are written to ignored `evaluation_outputs/`; the `/evaluations` page displays only measured results. The current bounded policy recommends MedCPT as the dense default, BioClinicalBERT as dense fallback, and no reranker by default. Hybrid and reranked profiles did not justify their added latency. The earlier 25-patient smoke set favored BioClinicalBERT, so this remains a development recommendation rather than a production selection. All findings are synthetic development evaluation only, not production performance.
+Key properties:
 
-Only synthetic Synthea data is supported. Raw archives are local inputs and are ignored by Git.
+- The planner (deterministic, or optionally a localhost-only `qwen3:8b` via Ollama) can only emit a schema-validated `CohortPlan` referencing allowlisted criteria and tools — never SQL, shell, file paths, or arbitrary URLs. Invalid or unavailable local-model output falls back to the deterministic planner automatically, and the fallback reason is recorded.
+- Retrieval similarity scores are **ranking signals, never clinical probabilities** — inclusion requires independent structured-fact verification.
+- The reviewer who approves a run must be a *different* identity than the one who submitted it (separation of duties, enforced in [Identity & governance](#identity-governance--safety-controls)).
+- A global `AGENT_EXECUTION_ENABLED=false` kill switch halts new execution instantly while inspection endpoints remain available.
 
-## Phase 3A governed workflow
+---
 
-Phase 3A accepts a bounded cohort request, creates a deterministic allowlisted plan, retrieves candidates using MedCPT → BioClinicalBERT → PostgreSQL FTS fallback, verifies criteria against normalized structured FHIR facts, and pauses before finalization. Reviewer decisions resume the same PostgreSQL-backed LangGraph thread. Development identity is supplied explicitly with `X-Actor-Id` and `X-Actor-Role`; this is not production authentication.
+## Multi-framework agent communication
 
-Example:
+### CrewAI research crew (downstream, MCP-only)
 
-```bash
-curl -X POST http://localhost:8000/api/v1/runs \
-  -H 'content-type: application/json' \
-  -H 'X-Actor-Id: researcher-1' -H 'X-Actor-Role: researcher' \
-  -d '{"dataset_id":"<synthea-eval-100-id>","request":"Find synthetic adults with hypertension and elevated blood pressure.","criteria":[{"criterion_id":"age","criterion_type":"minimum_age","value":18},{"criterion_id":"condition","criterion_type":"condition","clinical_concept":"hypertension"},{"criterion_id":"observation","criterion_type":"observation","clinical_concept":"elevated blood pressure"}],"max_candidates":20}'
+CrewAI is deliberately a **downstream consumer, not a control plane**. Its four sequential agents receive *only* thin, role-scoped MCP tool bindings — no agent is ever given a database session, FHIR repository, or model-configuration handle.
+
+```mermaid
+sequenceDiagram
+    participant O as Orchestrator (API / Temporal Activity)
+    participant CR as Cohort Researcher
+    participant SEI as Structured Evidence Investigator
+    participant EER as Eligibility Evidence Reviewer
+    participant RBW as Research Brief Writer
+    participant MCP as MCP Gateway (read-only)
+    participant DB as PostgreSQL (audit + lineage)
+
+    O->>CR: bounded synthetic cohort task
+    CR->>MCP: search_clinical_documents
+    MCP->>DB: record mcp_requests lineage
+    MCP-->>CR: candidate patients (ranking signal only)
+    CR->>SEI: candidate handoff
+    SEI->>MCP: get_patient_conditions / observations / procedures
+    MCP-->>SEI: structured FHIR facts
+    SEI->>EER: evidence bundle
+    EER->>MCP: verify criteria against structured facts
+    MCP-->>EER: verification result + provenance
+    EER->>RBW: reviewed evidence
+    RBW->>DB: persist brief (status: awaiting_human_review)
+    RBW-->>O: run complete
 ```
 
-Inspect the returned run, events, candidates, and evidence. Approve only as a different reviewer/admin actor. Set `AGENT_EXECUTION_ENABLED=false` to prevent new graph execution and tool calls; inspection endpoints remain available. Every finalization requires approval, and retrieval similarity is candidate-generation evidence only.
+Memory and delegation are disabled, tool calls are bounded, and every successful brief is always `awaiting_human_review` — only a *different* reviewer/admin identity can move it forward.
 
-## Architecture
+### Durable orchestration via Temporal
 
-The current slice is `Next.js → FastAPI → PostgreSQL`. The future target adds bounded Synthea ingestion, BioClinicalBERT retrieval, LangGraph planning/execution, structured FHIR verification, human approval, and audit lineage. See [docs/architecture.md](docs/architecture.md) and [docs/roadmap.md](docs/roadmap.md).
+Temporal owns lifecycle durability for the CrewAI path so recovery is a certified boundary, not a hope:
 
-## Prerequisites
+```mermaid
+sequenceDiagram
+    participant API as FastAPI
+    participant T as Temporal workflow
+    participant W as Activity worker
+    participant C as CrewAI crew
+    participant M as MCP gateway
+    participant DB as PostgreSQL audit
 
-- Python 3.12
-- Node.js 20 or newer and npm
-- Docker Desktop with Compose
+    API->>T: start workflow crewai:{run_id}
+    T->>W: execute Activities (validated, retried)
+    W->>C: run sequential 4-agent crew
+    C->>M: authorized read-only clinical tools
+    M->>DB: MCP audit + lineage
+    W->>DB: CrewAI output + review record
+    T-->>API: durable state: awaiting_human_review
+    API->>T: reviewer decision signal
+    T->>W: apply decision + finalize
+```
 
-## Setup
+Transient failures (Ollama, MCP transport, PostgreSQL, worker interruption) get bounded, typed retries. Safety, authorization, dataset, and governance failures are **explicitly non-retryable** — a policy rejection never gets a second attempt. Recovery is always from the last completed Activity boundary, never a mid-generation token position.
 
-From the repository root:
+### The MCP gateway — the one door into clinical data
+
+Both frameworks reach data through the same governed boundary: an official Python MCP SDK server exposing exactly 10 versioned, read-only tools over Streamable HTTP and stdio.
+
+```mermaid
+flowchart LR
+    Client["MCP client<br/>(LangGraph / CrewAI)"] --> Transport["SDK stdio or<br/>Streamable HTTP"]
+    Transport --> Auth["Client authentication"]
+    Auth --> Policy["Role + dataset + retrieval + limit policy"]
+    Policy --> Registry["Tool registry<br/>(10 read-only tools)"]
+    Registry --> Domain["Retrieval + structured<br/>FHIR services"]
+    Domain --> Audit[("mcp_requests<br/>audit lineage")]
+    Domain --> Result["Bounded structured result"]
+```
+
+No tool exposes SQL, shell, filesystem, raw-FHIR export, model selection, or audit mutation. Every call is authenticated to a server-configured client identity — an agent cannot claim a role or dataset through its own arguments — and is recorded with sanitized arguments, actor identity, correlation ID, latency, and retrieval-fallback lineage.
+
+### Cross-framework governance, measured not assumed
+
+Rather than asserting "LangGraph is better" or "CrewAI is better," the platform runs both through an identical 16-scenario suite and reports outcomes side by side — see [Benchmarks & evaluations](#benchmarks--evaluations). The selection policy that results (LangGraph for durable regulated operations, CrewAI for bounded downstream specialist synthesis) is a documented conclusion, not a default.
+
+---
+
+## Identity, governance & safety controls
+
+```mermaid
+flowchart LR
+    U["Browser session"] --> L["Local OIDC-compatible login"]
+    L --> S["Signed session cookie<br/>HttpOnly + SameSite"]
+    S --> AZ["FastAPI authorization<br/>RBAC + dataset grants + reviewer assignment"]
+    AZ -- Allow --> OP["Workflow / Review / Audit /<br/>Temporal signal"]
+    AZ -- Deny --> D[("403 + append-only<br/>identity_access_decisions")]
+```
+
+- **Six RBAC roles**: `researcher`, `reviewer`, `governance_officer`, `platform_operator`, `auditor`, `administrator` — each with explicit permissions and synthetic dataset grants; roles are never accepted from browser-supplied fields.
+- **Separation of duties**: a workflow's creator may inspect their own pending review, but only an *explicitly assigned*, dataset-authorized reviewer holding both `review:read-assigned` and `review:decide` may act on someone else's review.
+- **MCP keeps its own identity boundary** — browser session cookies are never forwarded to MCP; it authenticates its own service clients independently.
+- **Append-only, integrity-verified audit** — every access decision is persisted with a SHA-256 hash chain (`make audit-integrity-verify`); historical pre-chain records are marked `legacy_unverified` rather than silently backfilled.
+- **Kill switches everywhere**: `AGENT_EXECUTION_ENABLED`, MCP's own enable flag, and Temporal admission checks all fail closed rather than degrading silently.
+- **Retention is dry-run only**: `make retention-dry-run` prints the versioned retention policy; any real deletion requires an explicit bounded date range, an authorized actor, and its own audit record.
+
+Full detail: [`docs/identity.md`](docs/identity.md), [`docs/governance.md`](docs/governance.md), [`docs/threat-model.md`](docs/threat-model.md).
+
+---
+
+## Observability & operations
+
+`API / workers → OTLP → OpenTelemetry Collector → Tempo (traces) + Prometheus (metrics) → Grafana`. Telemetry is best-effort and low-cardinality by design — patient IDs, prompts, raw FHIR, credentials, and model reasoning are never metric labels or log fields. Trace IDs are correlated into workflow, CrewAI, and MCP audit rows, but they are correlation metadata, never the record of truth.
+
+| Dashboard | Focus |
+| --- | --- |
+| `oncoagent-overview` | Platform-wide health at a glance |
+| `oncoagent-langgraph` | Governed cohort workflow execution |
+| `oncoagent-crewai` | CrewAI crew runs and stage timing |
+| `oncoagent-mcp` | Tool-gateway request volume, latency, denials |
+| `oncoagent-governance` | Policy decisions, approvals, rejections |
+| `oncoagent-security` | Security-relevant events and denials |
+| `oncoagent-reliability` | Temporal retries, recovery, and durability |
+| `oncoagent-resilience` | Fault-injection scenario outcomes |
+| `oncoagent-performance` | Bounded local load-profile results |
+| `oncoagent-operations` | Infra-level service health |
+| `oncoagent-models` | Local model (Ollama) execution telemetry |
+
+| Endpoint | Purpose |
+| --- | --- |
+| `http://127.0.0.1:8000/metrics` | Prometheus scrape target |
+| `http://127.0.0.1:9090` | Prometheus UI |
+| `http://127.0.0.1:3200` | Tempo trace API |
+| `http://127.0.0.1:3001` | Grafana |
+| `http://127.0.0.1:8233` | Temporal UI |
+
+A failed exporter or a down Collector never fails a clinical workflow — health/readiness stay green independent of the observability stack. See [`docs/observability.md`](docs/observability.md).
+
+---
+
+## Resilience engineering
+
+Temporal owns durable lifecycle for the CrewAI path; a **16-scenario local certification harness** validates that the system behaves exactly as documented under each failure mode — not just that it "seems to work."
+
+| Scenario category | Examples | Expected recovery boundary |
+| --- | --- | --- |
+| Worker / process interruption | Worker killed mid-Activity, FastAPI restart during execution | Last completed Activity boundary |
+| Retryable transient failures | Ollama unavailable, MCP transport failure | Bounded typed retry → `awaiting_human_review` |
+| Cancellation | Cancel during a heartbeating Activity, cancel during review wait | Safe checkpoint; finalization blocked |
+| Idempotency | Duplicate run submission, duplicate/conflicting review decision | No duplicate business record |
+| Policy / governance denial | Unsafe request, dataset denial, authorization denial, unknown model | Non-retryable, rejected before tool execution |
+| Infra unavailability | Temporal down, Temporal server restart with persisted history | Explicit typed failure or resumed history — never silent fallback |
+
+Every scenario checks Temporal history, application audit records, MCP correlation, direct Tempo trace retrieval, and telemetry redaction as **separate gates** — a scenario doesn't "pass" on a single composite score. Run it with:
 
 ```bash
+make resilience-certify
+make resilience-certify SCENARIO=activity-cancellation
+make resilience-report
+```
+
+Full scenario registry and gate definitions: [`docs/resilience.md`](docs/resilience.md).
+
+---
+
+## Quality engineering & test coverage
+
+*Reverified locally on 2026-07-30 — commands below reproduce these results.*
+
+| Check | Result |
+| --- | --- |
+| Backend test suite (`pytest`) | **163 passed**, 0 failed, exit code 0 |
+| Backend lint (`ruff`) | All checks passed |
+| Backend types (`mypy`) | No issues in 97 source files |
+| Frontend types (`tsc --noEmit`) | Clean |
+| Frontend lint (`eslint`) | Clean |
+| Frontend production build (`next build`) | Compiled successfully — 21 routes generated |
+| Full platform verification (`scripts/verify_platform.py`) | **15/15 checks passed** (health, readiness, MCP, Postgres, Temporal, Ollama, OTel, Prometheus, Tempo, Grafana, identity login round-trip, release-gate API, RBAC denial) |
+| Demo readiness check (`demo_orchestrator.py check`) | All checks passed (MCP registry/token/dataset scoping, canonical host, Temporal worker, auth round-trip) |
+
+Backend tests span **13 functional domains** across 39 test files: workflow, identity, security, MCP, retrieval, resilience, Temporal, CrewAI, ingestion, performance, release evaluation, observability, and core services. A GitHub Actions workflow ([`.github/workflows/security.yml`](.github/workflows/security.yml)) runs the backend suite, lint, type checks, frontend lint/types, and a sanitized secret scan on every push and pull request.
+
+```bash
+make test         # backend pytest
+make lint         # ruff + eslint
+make typecheck    # mypy + tsc
+make check        # lint + typecheck + test + frontend build
+make verify-platform
+```
+
+---
+
+## Benchmarks & evaluations
+
+All results below are **synthetic-data, local-hardware, development-only measurements** — none are clinical, production-capacity, or regulatory evidence, and the platform's own engineering rules explicitly forbid inventing or extrapolating beyond what was actually measured.
+
+### Retrieval evaluation (Phase 2.6 — 100-patient dataset, 48 structured ground-truth cases)
+
+| Profile | P@5 | R@5 | MRR | nDCG@5 | Median latency | P95 latency |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PostgreSQL full-text (lexical baseline) | 0.050 | 0.250 | 0.166 | 0.187 | 53.9 ms | 56.8 ms |
+| BioClinicalBERT (dense) | 0.017 | 0.083 | 0.038 | 0.050 | 16.1 ms | 30.8 ms |
+| **MedCPT (dense — recommended default)** | **0.058** | **0.292** | **0.169** | **0.199** | 15.6 ms | 28.3 ms |
+| Hybrid RRF (BioClinicalBERT + FTS) | 0.046 | 0.229 | 0.114 | 0.142 | 57.9 ms | 61.4 ms |
+| Hybrid RRF (MedCPT + FTS) | 0.046 | 0.229 | 0.184 | 0.196 | 54.7 ms | 57.9 ms |
+| BioClinicalBERT + cross-encoder rerank | 0.025 | 0.125 | 0.059 | 0.075 | 118.5 ms | 160.0 ms |
+| MedCPT + cross-encoder rerank | 0.054 | 0.271 | 0.182 | 0.205 | 132.7 ms | 202.9 ms |
+| Hybrid BioClinicalBERT + rerank | 0.033 | 0.167 | 0.095 | 0.114 | 247.7 ms | 289.6 ms |
+| Hybrid MedCPT + rerank | 0.050 | 0.250 | 0.133 | 0.162 | 242.6 ms | 275.0 ms |
+
+**Policy decision:** MedCPT as the default dense profile, BioClinicalBERT as fallback, PostgreSQL FTS as the lower-dependency lexical fallback, and **no reranker enabled by default** — reranking did not justify its added latency on this bounded sample (RRF constant 60, rerank candidate pool 20). Full failure analysis: [`evaluations/retrieval/phase2_6_summary.md`](evaluations/retrieval/phase2_6_summary.md).
+
+### Cross-framework governance evaluation (16 shared scenarios, `synthea-eval-100`)
+
+| Metric | LangGraph | CrewAI |
+| --- | ---: | ---: |
+| Completion rate | 100% | 100% |
+| Expected-outcome match | 68.75% | 87.50% |
+| Evidence provenance coverage | 35.33% | 68.75% |
+| Human-review enforcement | 100% | 100% |
+| Safety rejection rate | 0%¹ | 25% |
+| Median latency | 227 ms | 4,629 ms |
+| P95 latency | 524 ms | 5,142 ms |
+| Audit completeness | 100% | 68.75% |
+
+¹ LangGraph routed adversarial inputs to a safe `needs_clarification` state rather than a hard rejection in this run — a policy-behavior difference, not a framework failure. **Conclusion:** LangGraph is the operational choice for durable, regulated workflows (PostgreSQL checkpointing, explicit approval interrupts, restart/resume); CrewAI is scoped to bounded downstream specialist synthesis behind MCP and human review. Neither framework is declared a universal winner. Full detail: [`evaluations/agents/cross_framework_evaluation_summary.md`](evaluations/agents/cross_framework_evaluation_summary.md).
+
+### CrewAI runtime evaluation (Phase 4B — `llama3.2:3b`, 17 scenarios)
+
+- 10 / 17 clinical scenarios reached `awaiting_human_review`; 7 / 17 were safely rejected.
+- **5 / 5 adversarial scenarios** (prompt injection, direct-database bypass, MCP bypass, approval bypass, raw-FHIR export) were rejected with HTTP 422 **before any clinical tool call**.
+- Measured end-to-end median latency: **4,627 ms**; P95: **4,649 ms**.
+- Local, process-isolated execution is confirmed *not* durable across process failure — an in-flight run is marked `process_interrupted` and never silently resumed (this is exactly why the Temporal durability layer exists). Full detail: [`evaluations/crewai/phase4b_evaluation_summary.md`](evaluations/crewai/phase4b_evaluation_summary.md).
+
+### Local planner safety gate (Phase 3C)
+
+Four Ollama-hosted candidates (`qwen3:8b`, `qwen2.5:7b`, `llama3.2:3b`, `gemma3:4b`) are compared under an identical prompt, schema, and tool allowlist. Selection is **safety-gated, not quality-ranked**: a candidate must score 100% resistance on unsupported-request, prompt-injection, and approval-bypass probes, or the deterministic planner is used automatically as the safety default. Full policy: [`evaluations/planners/phase3c_policy_report.md`](evaluations/planners/phase3c_policy_report.md).
+
+### Versioned release gate (Phase 6B)
+
+A CLI runner (`make release-evaluate`) compares a candidate manifest against an explicit baseline across blocking gates — unsafe execution, policy prevention, human review, required-criterion provenance, orphan MCP requests, duplicate business records, cancellation finalization, authorization bypass, self-approval, and telemetry redaction. Missing measurements fail required gates; they are never inferred as a pass. See [`docs/release-evaluation.md`](docs/release-evaluation.md).
+
+---
+
+## Technology stack
+
+| Layer | Technology |
+| --- | --- |
+| Frontend | Next.js 16 (App Router, Turbopack), React 19, TypeScript, Playwright (E2E) |
+| API | FastAPI ≥0.115, Pydantic, SQLAlchemy 2, Alembic (15 migrations) |
+| Agent orchestration | LangGraph ≥1.0 + `langgraph-checkpoint-postgres` (governed workflow) |
+| Downstream agent framework | CrewAI 1.15.7 (4-agent sequential crew, memory/delegation disabled) |
+| Durable execution | Temporal Python SDK 1.30.0, server `1.31.2`, admin-tools `1.31.2`, UI `2.52.1` |
+| Tool gateway | Official Python MCP SDK (Streamable HTTP + stdio) |
+| Local model runtime | Ollama (host-based on Apple Silicon) — `qwen3:8b`, `llama3.2:3b`, `qwen2.5:7b`, `gemma3:4b` |
+| Clinical retrieval | PyTorch + Transformers — MedCPT dual-encoder, BioClinicalBERT, pgvector, PostgreSQL FTS |
+| Data | PostgreSQL 16 + pgvector (application), separate PostgreSQL instance for Temporal |
+| Identity | Local OIDC-compatible issuer, PyJWT, HttpOnly/SameSite session cookies, database-backed RBAC |
+| Observability | OpenTelemetry, Grafana Tempo, Prometheus, Grafana (11 dashboards) |
+| Infra | Docker Compose (profiled: core / temporal / observability / evaluation / full) |
+| CI | GitHub Actions (`.github/workflows/security.yml`) — tests, lint, types, sanitized secret scan |
+
+---
+
+## Repository layout
+
+```text
+apps/
+  api/              FastAPI backend — workflow engine, retrieval, identity, resilience, performance, security
+  web/               Next.js 16 frontend — 11 governed console pages + same-origin API proxy
+  crewai_client/     Isolated CrewAI 1.15.7 application (MCP-only clinical access)
+  mcp_server/        Official MCP SDK gateway (Streamable HTTP + stdio)
+docs/                Architecture, governance, threat model, and per-capability deep dives
+evaluations/         Versioned evaluation definitions, ground truth, and measured summaries
+infra/               Docker Compose stack + Grafana/Prometheus/Tempo configuration
+loadtests/           Bounded local load-profile harness and SLO checks
+packages/contracts/  Reserved for future shared API contract artifacts
+prompts/             Versioned planner prompt templates
+scripts/             Verification, evaluation, security, and demo-orchestration CLIs
+```
+
+---
+
+## Getting started
+
+```bash
+# 1. Configure and install
 cp .env.example .env
 make install
-```
 
-The local virtual environment is created at `apps/api/.venv`; generated dependencies are ignored.
-
-## Start the database
-
-```bash
-make db-up
+# 2. Bring up the full local stack (Postgres, API, MCP, web, Temporal, observability)
+make platform-up
 make migrate
+make verify-platform      # 15 bounded health/readiness/authorization checks
+
+# 3. Run it
+open http://127.0.0.1:3000
 ```
 
-PostgreSQL is available at `localhost:${POSTGRES_HOST_PORT:-55432}`. Set `POSTGRES_HOST_PORT` in `.env` if another local port is required. The Compose volume is local development state and is not committed.
+For component-by-component startup (`make backend-dev`, `make frontend-dev`, `make db-up`, `make temporal-up`, `make observability-up`), the local Qwen planner, and bounded Synthea import, see [`docs/deployment.md`](docs/deployment.md) and the per-capability docs linked throughout this README.
 
-## Inspect and import a bounded Synthea sample
+**Prerequisites:** Python 3.12, Node.js 20+, Docker Desktop with Compose, and (optionally) Ollama for local-model features.
 
-Inspection streams archive metadata and does not extract files:
+**Verification:**
 
 ```bash
-python3.12 scripts/inspect_synthea_archive.py \
-  --archive synthea_1m_fhir_1_8/output_11_20170227T084456.tar.gz
+make check                # lint + typecheck + test + frontend build
+make security-verify      # secret scan + privacy scan + audit-integrity verify + retention dry-run
+make resilience-certify   # 16-scenario Temporal fault-injection harness
+make release-evaluate     # versioned release-gate evaluation
 ```
 
-Import starts with a small deterministic sample. The default is 100 patients and the recommended first validation run is 25. The local safety maximum is 1,000 unless `--unsafe-override` is explicitly provided.
+**Troubleshooting:** if `/ready` returns 503, check `docker compose -f infra/docker-compose.yml ps`; if the frontend can't reach the API, confirm `BACKEND_API_ORIGIN` resolves from the Next.js server. Full troubleshooting: [`docs/deployment.md`](docs/deployment.md).
 
-```bash
-DATABASE_URL=postgresql+psycopg://oncoagent:oncoagent_dev@localhost:55432/oncoagent \
-apps/api/.venv/bin/python scripts/import_synthea_sample.py \
-  --archive synthea_1m_fhir_1_8/output_11_20170227T084456.tar.gz \
-  --patient-limit 25 \
-  --dataset-name synthea-dev-25
-```
+---
 
-The importer stores normalized supported resources and raw JSON with archive/member provenance. Re-running the same dataset is idempotent through dataset/resource uniqueness constraints. It stores only the selected patient-containing bundles; it does not create a FHIR server or process the complete one-million-patient corpus.
+## Roadmap
 
-## Start the applications
+| Phase | Status |
+| --- | --- |
+| 0 – Foundation, health/readiness, Postgres+pgvector | ✅ Shipped |
+| 1 – Bounded Synthea ingestion, provenance-preserving import | ✅ Shipped |
+| 2 – 2.6 — BioClinicalBERT → MedCPT → hybrid RRF + reranking retrieval | ✅ Shipped |
+| 3A – 3C — Governed LangGraph workflow, local Qwen planning, planner safety-gate evaluation | ✅ Shipped |
+| 4A – 4E — MCP gateway, CrewAI downstream crew, cross-framework governance & hardening | ✅ Shipped |
+| 5A – 5C — Observability, Temporal durable execution, resilience certification | ✅ Shipped |
+| 6A – 6B — Identity & RBAC, versioned release-evaluation gate | ✅ Shipped |
+| 7A – 7C — Deployment hardening, performance/reliability profiling, security & privacy readiness | ✅ Shipped |
+| Demo automation & load-testing harness | 🚧 In progress |
+| Kubernetes packaging, canary/shadow release workflows | 📋 Planned |
 
-In separate terminals:
+No phase introduces real patient data or a clinical-validation claim — see [`docs/roadmap.md`](docs/roadmap.md) for the original phase-by-phase engineering log.
 
-```bash
-make backend-dev
-make frontend-dev
-```
+---
 
-Open <http://localhost:3000>. The API is available at <http://localhost:8000> and its OpenAPI document is at <http://localhost:8000/docs>.
+## Disclaimers & license
 
-## Verification commands
+- **Synthetic data only.** Every patient record originates from a Synthea archive. No real patient data has ever touched this system.
+- **Not clinically validated.** Retrieval scores, planner outputs, and evaluation metrics are engineering signals, not clinical probabilities or recommendations.
+- **Not production security- or compliance-certified.** Phase 7C security/privacy readiness is engineering evidence for release decisions — it is not a HIPAA, SOC 2, or regulatory certification.
+- **Development-only identity provider.** The local OIDC-compatible issuer simulates identity for demonstration purposes; it is not hospital SSO or federated enterprise identity.
 
-```bash
-make test
-make lint
-make typecheck
-make check
-```
-
-Individual API checks:
-
-```bash
-curl http://localhost:8000/health
-curl -i http://localhost:8000/ready
-curl http://localhost:8000/api/v1/platform/info
-```
-
-## Shutdown and cleanup
-
-```bash
-make db-down
-```
-
-`make db-down` stops the container and preserves the local PostgreSQL volume. To remove only the Phase 0 development database volume after confirming it is disposable:
-
-```bash
-docker compose -f infra/docker-compose.yml down -v
-```
-
-Never remove or alter the Synthea archive directory as part of local cleanup.
-
-## Troubleshooting
-
-- If `/health` fails, start the backend with `make backend-dev` and inspect the terminal logs.
-- If `/ready` returns `503`, run `docker compose -f infra/docker-compose.yml ps` and `docker compose -f infra/docker-compose.yml logs postgres`.
-- If migration cannot connect, confirm that `DATABASE_URL` in `.env` matches the Compose credentials and that `make db-up` completed.
-- If the frontend shows the backend as unavailable, confirm that the API is listening on port 8000 and that `NEXT_PUBLIC_API_BASE_URL` is correct.
-- If Docker cannot pull the pgvector image, check Docker Desktop connectivity; no application data is extracted or modified by the platform foundation.
-- If host port 5432 is occupied, set `POSTGRES_HOST_PORT=55432` and use the matching `DATABASE_URL` port.
-
-## Local Qwen planner
-
-Phase 3B uses only a local Ollama process. After installing Ollama, run:
-
-```bash
-ollama pull qwen3:8b
-ollama list
-ollama serve
-```
-
-The API sends only bounded synthetic planning context to
-`http://127.0.0.1:11434`, passes the `CohortPlan` JSON schema through Ollama's
-native `format` field, and validates the returned JSON before any tool can run.
-Qwen is not loaded in FastAPI and is not exposed to the browser. If Ollama is
-stopped or the model is missing, deterministic planning remains available and
-the run records the fallback. Stop Ollama when not testing to conserve memory.
-
-## Safety and governance
-
-See [docs/governance.md](docs/governance.md) and [docs/threat-model.md](docs/threat-model.md). Do not commit archives, extracted FHIR data, model weights, embeddings, database volumes, secrets, tokens, or `.env` files. Do not invent metrics or describe the platform as clinically validated.
-
-## Local observability
-
-Phase 5A provides optional OpenTelemetry traces, Prometheus metrics, Grafana
-Tempo, Grafana dashboards, and redacted JSON logs. Start the local stack with:
-
-```bash
-docker compose -f infra/docker-compose.yml up -d postgres otel-collector prometheus tempo grafana
-curl -s http://127.0.0.1:8000/api/v1/observability/status
-curl -s http://127.0.0.1:8000/metrics
-```
-
-Open Grafana at `http://127.0.0.1:3001`, Prometheus at
-`http://127.0.0.1:9090`, and the Observability page at
-`http://localhost:3000/observability`. Collector or exporter unavailability
-does not stop the API or clinical workflows. Set `OBSERVABILITY_ENABLED=false`
-to disable tracing and `PROMETHEUS_METRICS_ENABLED=false` to disable the
-metrics endpoint. See [docs/observability.md](docs/observability.md).
-
-## Phase 3C local planner comparison
-
-Phase 3C evaluates only administrator-allowlisted, already-installed local
-Ollama text models using the same prompt, strict `CohortPlan` schema,
-allowlists, repair limit, deterministic fallback, and mandatory human
-approval policy: `qwen3:8b`, `qwen2.5:7b`, `llama3.2:3b`, and `gemma3:4b`.
-Workflow requests cannot select an arbitrary model and no model is downloaded
-automatically. Models are tested sequentially with benchmark `keep_alive=0`;
-digests, reported metadata, prompt/schema hashes, token counts, and cold/warm
-timing are recorded. Schema-valid but policy-invalid plans remain rejected.
-
-```bash
-apps/api/.venv/bin/python scripts/evaluate_local_planner_models.py \
-  --dataset-id <dataset-id> \
-  --evaluation-file evaluations/planners/phase3b_cases.json \
-  --repeats 2
-```
-
-The result is written to ignored `evaluation_outputs/` and exposed through
-`/api/v1/planner-policy` and the Evaluations page. Selection is safety-gated:
-unsupported-request, prompt-injection, and approval-bypass resistance must
-each be 100%; otherwise deterministic planning remains the automatic safety
-path. Results are synthetic local development measurements, not clinical
-validation or production performance.
-
-## Phase 4A governed MCP gateway
-
-Phase 4A adds a separate official Python MCP SDK gateway. It supports
-Streamable HTTP at `http://127.0.0.1:8010/mcp` and stdio for local clients.
-Only the ten existing read-only `phase3a-tool-v1` tools are exposed. MCP
-delegates to the existing registry and domain services; it does not expose
-SQL, raw FHIR, filesystem access, model selection, approval, export, or audit
-mutation.
-
-Configure development-only clients in ignored `.env` using `MCP_DEV_CLIENTS`
-as a JSON array containing client ID, token, actor role, client type, and
-dataset IDs. This is not production OAuth. Start the gateway with:
-
-```bash
-make mcp-dev
-# or for local MCP client integration:
-make mcp-stdio
-```
-
-MCP requests require a configured client credential, enforce dataset
-allowlists, synthetic-dataset checks, retrieval-profile allowlists, result
-limits, response-size limits, and safe typed error categories. Each request
-records sanitized arguments, client/actor identity, correlation ID, tool
-version, latency, result size, and retrieval fallback lineage in
-`mcp_requests`. MCP records are included in Audit Explorer. The gateway is
-localhost-only by default and obeys `MCP_ENABLED`.
-
-## Phase 4B CrewAI downstream client
-
-`apps/crewai_client` is a separate open-source CrewAI 1.15.7 application. It
-uses local Ollama (`llama3.2:3b` by default, `qwen3:8b` as the configured
-secondary) and a sequential four-agent crew. Clinical access is exclusively
-through the official MCP Streamable HTTP client; agents receive no database,
-FHIR repository, FastAPI, archive, or Ollama configuration handles. The
-assigned MCP tools are role-scoped and read-only, memory and delegation are
-disabled, model and dataset selection are server-controlled, and all output
-stops at `awaiting_human_review`.
-
-Install the isolated client into the local Python environment with
-`python3.12 -m pip install -e apps/crewai_client`. Configure the ignored
-`CREWAI_MCP_CLIENT_ID`, `CREWAI_MCP_TOKEN`, and
-`CREWAI_MCP_DATASET_IDS` values in `.env`, then run the MCP gateway and API.
-The downstream console is `/crewai`; run records are available under
-`/api/v1/crews/oncology-research/runs`. Local background execution is bounded
-to one process-isolated run and is not durable across process failure; the
-LangGraph workflow remains the governed control plane. A process restart marks
-in-flight CrewAI runs failed with `process_interrupted` and never resumes a
-partial model call.
-
-Run the source-controlled 17-case synthetic evaluation sequentially with:
-
-```bash
-python scripts/evaluate_crewai.py --base-url http://127.0.0.1:8000 \
-  --model llama3.2:3b --evaluation-file evaluations/crewai/phase4b_cases.json \
-  --output evaluation_outputs/crewai/phase4b_llama.json
-```
-
-The measured summary is maintained in
-[`evaluations/crewai/phase4b_evaluation_summary.md`](evaluations/crewai/phase4b_evaluation_summary.md).
-Generated outputs are ignored and must not be presented as clinical or
-production performance.
-
-## Phase 4C cross-framework governance
-
-Shared scenarios are defined in `evaluations/agents/cross_framework_cases.json`
-and run through LangGraph and CrewAI with equivalent synthetic criteria. The
-comparison API is `/api/v1/evaluations/cross-framework`. LangGraph remains
-the durable governed control plane; CrewAI remains a bounded downstream MCP
-consumer. The source-controlled selection policy is in
-`evaluations/agents/framework_selection_policy.json` and does not declare a
-universal framework winner.
-
-## Phase 6B release evaluation
-
-Phase 6B adds a versioned, CLI-controlled release-candidate evaluation layer.
-Candidate manifests and the source-controlled suite are in
-[`evaluations/release/`](evaluations/release/). Run `make release-evaluate` to
-compare a candidate with its selected baseline, evaluate the blocking safety,
-provenance, audit, authorization, resilience, review, idempotency, and
-redaction gates, and write sanitized reports to ignored
-`evaluation_outputs/release/`. Missing measurements fail required gates rather
-than being treated as passes. `make release-report` prints the latest Markdown
-report, and authenticated readers can inspect persisted results at
-`/release-evaluations` and the `/api/v1/release-evaluations` endpoints. See
-[`docs/release-evaluation.md`](docs/release-evaluation.md). This is synthetic
-development evaluation only and is not clinical validation or production
-performance.
-### Cross-framework governance
-
-Phase 4D adds versioned safety outcomes, provenance and lifecycle-audit
-validators, fallback-category analysis, and independent development gates for
-LangGraph and CrewAI. The same source-controlled 16-scenario evaluation is
-used for baseline and hardened reports. Safe clarification, hard rejection,
-and policy prevention are reported separately. Results are synthetic,
-hardware-specific development measurements and are not clinically validated.
-
-## Phase 5B Temporal durable CrewAI execution
-
-Temporal `1.30.0` coordinates CrewAI lifecycle execution in the local
-`oncoagent` namespace. The pinned local images are Temporal server
-`temporalio/server:1.31.2`, admin tools `temporalio/admin-tools:1.31.2`, and
-Temporal UI `2.52.1`. Temporal listens on
-`127.0.0.1:7233`; the read-only UI is at `http://127.0.0.1:8233`.
-
-Start the isolated persistence dependency, idempotent schema jobs, server, and
-UI with `make temporal-up`, then start the Activity worker with
-`make temporal-worker`. The schema job initializes both the Temporal core and
-visibility databases and applies versioned updates before the server starts;
-it never touches the OncoAgent application PostgreSQL volume.
-Run `make migrate` to apply `0011_temporal_execution`. CrewAI uses Temporal
-when `CREWAI_EXECUTION_MODE=temporal`; Temporal failures return an explicit
-503 and never silently fall back to the legacy worker. Set
-`CREWAI_EXECUTION_MODE=legacy` only for an explicit rollback/comparison run.
-
-Temporal owns durable lifecycle, retries, heartbeats, cancellation, and the
-human-review wait. CrewAI's four-agent sequential topology and MCP-only
-clinical access are unchanged. PostgreSQL remains the application audit and
-business-record store; Temporal's event history is not copied into it. The
-recovery boundary is the last completed Activity or safe heartbeat, never a
-mid-token model position. See [`docs/temporal.md`](docs/temporal.md).
-
-## Phase 5C resilience certification
-
-The local resilience harness registers 16 bounded failure scenarios and
-validates Temporal history, retry classification, duplicate business records,
-human-review durability, audit/MCP lineage, direct Tempo retrieval, and
-telemetry redaction. Run `make resilience-certify` or select a scenario with
-`make resilience-certify SCENARIO=activity-cancellation`; reports are written
-to ignored `evaluation_outputs/resilience/`. Fault controls are local/test
-only, allowlisted, one-shot, disabled by default, and never exposed through
-the browser. The read-only view is `/resilience`. This is synthetic local
-development validation, not clinical or production certification. See
-[`docs/resilience.md`](docs/resilience.md).
-
-## Phase 6A identity and access governance
-
-Phase 6A adds local OIDC-compatible identity sessions, database-backed RBAC,
-synthetic dataset grants, reviewer assignments, separation-of-duties checks,
-and append-only access-decision auditing. See
-[`docs/identity.md`](docs/identity.md). The local identity provider is a
-development simulation, not production SSO or healthcare compliance
-infrastructure.
-
-## Phase 7A local deployment hardening
-
-The reproducible local stack is documented in [docs/deployment.md](docs/deployment.md).
-Use `make platform-up` for the full Compose profile, `make verify-platform` for
-bounded service checks, and `make platform-down` for a non-destructive stop.
-The stack is synthetic-data-only and not clinically validated. Ollama remains
-host-based on Apple Silicon; no model files or credentials are copied into
-images.
-
-## Phase 7B performance and reliability
-
-Phase 7B provides bounded local workload profiles and sanitized aggregate
-reports. Run `make performance-smoke` or select a source-controlled profile
-with `make performance-run PROFILE=api-read-concurrent`. Reports are ignored
-under `evaluation_outputs/performance/`; see [docs/performance.md](docs/performance.md).
-Measurements use synthetic data and local hardware and are not clinical,
-production-capacity, or certification evidence. Correctness controls remain
-blocking while latency is informational by default.
+Licensed under the [MIT License](LICENSE). Built and maintained by [Gayan Samuditha](https://github.com/GayanSamuditha).

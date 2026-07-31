@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 type Json = Record<string, unknown>;
 
 export default function EvaluationsPage() {
@@ -15,10 +15,10 @@ export default function EvaluationsPage() {
   const [framework, setFramework] = useState("all");
   useEffect(() => {
     Promise.all([
-      fetch(`${apiBase}/api/v1/evaluations/phase2-6-bounded`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${apiBase}/api/v1/evaluations/cross-framework`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${apiBase}/api/v1/framework-policy`, { cache: "no-store" }).then((r) => r.json()),
-      fetch(`${apiBase}/api/v1/agents`, { headers: { "X-Actor-Id": "evaluation-console", "X-Actor-Role": "admin" } }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/evaluations/phase2-6-bounded`, { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/evaluations/cross-framework`, { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/framework-policy`, { credentials: "include", cache: "no-store" }).then((r) => r.json()),
+      fetch(`${apiBase}/api/v1/agents`, { credentials: "include" }).then((r) => r.json()),
     ]).then(([retrievalResult, crossResult, policyResult, agentResult]) => { setRetrieval(retrievalResult); setCross(crossResult); setPolicy(policyResult); setAgents(agentResult); }).catch(() => setError(true));
   }, []);
   const profiles = (retrieval?.profiles ?? {}) as Record<string, Json>;

@@ -59,3 +59,13 @@ deltas, framework results, and limitations. It cannot execute an evaluation.
 
 This is synthetic local development evaluation only. It is not clinically
 validated, not a regulatory certification, and not production performance.
+# Security evidence extension
+
+Phase 7C candidates may include a `security_metrics` object. When present,
+the release evaluator adds blocking security gates for secret leakage,
+authorization and dataset bypass, browser credential propagation, unsafe tool
+execution, critical dependency/container findings, audit integrity, privacy
+leakage, and assessment completion. Missing or unavailable security evidence
+is `not_evaluable` and blocks that security-enabled candidate; it is never
+inferred as a pass. Legacy candidates without the Phase 7C evidence object
+remain governed by their versioned contract and are not silently upgraded.

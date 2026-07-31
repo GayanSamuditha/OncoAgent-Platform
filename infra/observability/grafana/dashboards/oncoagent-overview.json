@@ -3,13 +3,13 @@
   "editable": false,
   "panels": [
     {"type":"timeseries","title":"API request rate","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum(rate(oncoagent_http_requests_total[5m]))","refId":"A"}]},
-    {"type":"timeseries","title":"API error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(oncoagent_http_errors_total[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"API error rate","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum(rate(oncoagent_http_errors_total[5m])) or vector(0)","refId":"A"}]},
     {"type":"stat","title":"Awaiting workflow approvals","gridPos":{"h":6,"w":8,"x":0,"y":8},"targets":[{"expr":"oncoagent_workflows_awaiting_approval","refId":"A"}]},
     {"type":"stat","title":"Awaiting CrewAI reviews","gridPos":{"h":6,"w":8,"x":8,"y":8},"targets":[{"expr":"oncoagent_crew_runs_awaiting_review","refId":"A"}]},
-    {"type":"stat","title":"Orphan MCP requests","gridPos":{"h":6,"w":8,"x":16,"y":8},"targets":[{"expr":"oncoagent_orphan_mcp_requests","refId":"A"}]}
+    {"type":"stat","title":"Orphan MCP requests","gridPos":{"h":6,"w":8,"x":16,"y":8},"targets":[{"expr":"max(oncoagent_orphan_mcp_requests{job=\"oncoagent-temporal-worker\"})","refId":"A"}]}
   ],
   "schemaVersion": 39,
   "title": "OncoAgent Platform Overview",
   "uid": "oncoagent-overview",
-  "version": 1
+  "version": 2
 }

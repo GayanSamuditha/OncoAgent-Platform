@@ -67,6 +67,7 @@ class RunCreateRequest(BaseModel):
     criteria: list[Criterion] | None = Field(default=None, max_length=10)
     max_candidates: int = Field(default=20, ge=1, le=50)
     planner_provider: Literal["auto", "qwen_local", "deterministic"] = "auto"
+    correlation_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class ApprovalDecisionRequest(BaseModel):

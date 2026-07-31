@@ -31,7 +31,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oncoagent}:${POSTGRES_PASSWORD:-oncoagent_dev}@postgres:5432/${POSTGRES_DB:-oncoagent}
       ENVIRONMENT: ${ENVIRONMENT:-local}
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://127.0.0.1:3000"]}
     working_dir: /opt/oncoagent/apps/api
     command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
     depends_on:
@@ -47,26 +47,32 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-oncoagent}:${POSTGRES_PASSWORD:-oncoagent_dev}@postgres:5432/${POSTGRES_DB:-oncoagent}
       ENVIRONMENT: ${ENVIRONMENT:-local}
-      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://127.0.0.1:3000"]}
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8010
       TEMPORAL_ADDRESS: temporal:7233
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      LOCAL_LLM_BASE_URL: ${LOCAL_LLM_BASE_URL:-http://host.docker.internal:11434}
-      CREWAI_OLLAMA_BASE_URL: ${CREWAI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OTEL_SERVICE_NAME: oncoagent-api
+      LOCAL_LLM_BASE_URL: http://host.docker.internal:11434
+      CREWAI_OLLAMA_BASE_URL: http://host.docker.internal:11434
       CREWAI_MCP_URL: http://mcp:8010/mcp
       CREWAI_MCP_CLIENT_ID: ${CREWAI_MCP_CLIENT_ID:-}
       CREWAI_MCP_TOKEN: ${CREWAI_MCP_TOKEN:-}
       CREWAI_MCP_DATASET_IDS: ${CREWAI_MCP_DATASET_IDS:-}
       IDENTITY_LEGACY_HEADERS_ENABLED: "false"
+      API_WORKFLOW_CONCURRENCY: ${API_WORKFLOW_CONCURRENCY:-1}
+      PERFORMANCE_QUEUE_TIMEOUT_SECONDS: ${PERFORMANCE_QUEUE_TIMEOUT_SECONDS:-5}
       TEMPORAL_DEV_FAULT_STAGE: ""
       TEMPORAL_DEV_FAULT_CATEGORY: ""
       CREWAI_EXECUTION_MODE: temporal
-      CREWAI_DISABLE_TELEMETRY: "true"
-      CREWAI_DISABLE_TRACKING: "true"
-      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY:-true}
+      CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING:-true}
+      CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED:-false}
+      TRUSTED_HOSTS: '["127.0.0.1", "localhost", "testserver", "api"]'
     ports:
       - "127.0.0.1:${API_HOST_PORT:-8000}:8000"
+    volumes:
+      - ../evaluation_outputs:/usr/local/lib/evaluation_outputs:ro
     depends_on:
       api-migrate:
         condition: service_completed_successfully
@@ -74,7 +80,7 @@ services:
       - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
-      interval: 10s
+      interval: 5s
       timeout: 5s
       retries: 12
       start_period: 20s
@@ -97,9 +103,13 @@ services:
       MCP_ENABLED: "true"
       MCP_DEV_CLIENTS: ${MCP_DEV_CLIENTS:-[]}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: oncoagent-mcp
+      PROMETHEUS_METRICS_PORT: "9102"
       IDENTITY_LEGACY_HEADERS_ENABLED: "false"
     ports:
       - "127.0.0.1:${MCP_HOST_PORT:-8010}:8010"
+    expose:
+      - "9102"
     depends_on:
       api-migrate:
         condition: service_completed_successfully
@@ -120,10 +130,11 @@ services:
       dockerfile: apps/web/Dockerfile
       target: runtime
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://127.0.0.1:8000}
+        BACKEND_API_ORIGIN: ${BACKEND_API_ORIGIN:-http://api:8000}
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      BACKEND_API_ORIGIN: ${BACKEND_API_ORIGIN:-http://api:8000}
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-3000}:3000"
     depends_on:
@@ -261,16 +272,18 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-local}
       TEMPORAL_ADDRESS: temporal:7233
       CREWAI_EXECUTION_MODE: temporal
-      CREWAI_DISABLE_TELEMETRY: "true"
-      CREWAI_DISABLE_TRACKING: "true"
-      CREWAI_TRACING_ENABLED: "false"
+      CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY:-true}
+      CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING:-true}
+      CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED:-false}
       CREWAI_MCP_URL: http://mcp:8010/mcp
       CREWAI_MCP_CLIENT_ID: ${CREWAI_MCP_CLIENT_ID:-crewai-oncology-research}
       CREWAI_MCP_TOKEN: ${CREWAI_MCP_TOKEN:-}
       CREWAI_MCP_DATASET_IDS: ${CREWAI_MCP_DATASET_IDS:-}
-      CREWAI_OLLAMA_BASE_URL: ${CREWAI_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      CREWAI_OLLAMA_BASE_URL: http://host.docker.internal:11434
       MCP_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_SERVICE_NAME: oncoagent-temporal-worker
+      PROMETHEUS_METRICS_PORT: "9101"
       TEMPORAL_DEV_FAULT_STAGE: ${TEMPORAL_DEV_FAULT_STAGE:-}
       TEMPORAL_DEV_FAULT_CATEGORY: ${TEMPORAL_DEV_FAULT_CATEGORY:-}
       TEMPORAL_DEV_FAULT_ATTEMPTS: ${TEMPORAL_DEV_FAULT_ATTEMPTS:-1}
@@ -284,9 +297,11 @@ services:
         condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    expose:
+      - "9101"
     healthcheck:
       test: ["CMD", "python", "-c", "import os; raise SystemExit(0 if os.getenv('TEMPORAL_ADDRESS') else 1)"]
-      interval: 30s
+      interval: 5s
       timeout: 5s
       retries: 3
     deploy:

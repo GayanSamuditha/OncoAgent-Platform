@@ -5,7 +5,7 @@
     {"type":"timeseries","title":"HTTP request pressure","targets":[{"expr":"sum(rate(oncoagent_http_requests_total[5m]))","refId":"A"}]},
     {"type":"timeseries","title":"HTTP p95 latency","targets":[{"expr":"histogram_quantile(0.95, sum by (le) (rate(oncoagent_http_request_duration_seconds_bucket[5m])))","refId":"A"}]},
     {"type":"timeseries","title":"Performance queue depth","targets":[{"expr":"sum by (queue) (oncoagent_performance_queue_depth)","refId":"A"}]},
-    {"type":"timeseries","title":"Database duration","targets":[{"expr":"sum by (operation) (rate(oncoagent_database_operation_duration_seconds_sum[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"Database duration","targets":[{"expr":"sum by (operation) (increase(oncoagent_database_operation_duration_seconds_sum[$__range])) / clamp_min(sum by (operation) (increase(oncoagent_database_operation_duration_seconds_count[$__range])), 1)","refId":"A"}]},
     {"type":"timeseries","title":"Workflow concurrency","targets":[{"expr":"sum by (framework) (oncoagent_performance_workflow_concurrency)","refId":"A"}]}
   ],
   "schemaVersion": 39,

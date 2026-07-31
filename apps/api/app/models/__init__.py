@@ -53,6 +53,11 @@ from app.models.retrieval import (
     ClinicalEmbedding,
     IndexingRun,
 )
+from app.models.security import (
+    SecurityAssessmentRecord,
+    SecurityFindingRecord,
+    SecurityRetentionRuleRecord,
+)
 from app.models.workflow import (
     ApprovalDecision,
     ApprovalRequest,
@@ -118,4 +123,7 @@ __all__ = [
     "ReleaseMetricResult",
     "ReleaseGateResult",
     "ReleaseDecision",
+    "SecurityAssessmentRecord",
+    "SecurityFindingRecord",
+    "SecurityRetentionRuleRecord",
 ]

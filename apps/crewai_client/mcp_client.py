@@ -64,7 +64,7 @@ class MCPGatewayClient:
                             read_timeout_seconds=timedelta(seconds=30),
                         )
                     data: dict[str, Any] = dict(result.structuredContent or {})
-                    if result.isError:
+                    if result.isError or isinstance(data.get("error"), dict):
                         raise RuntimeError("MCP tool returned a safe error")
                     request_id = str(data.get("correlation_id", uuid.uuid4()))
                     self.request_ids.append(request_id)
@@ -90,4 +90,7 @@ class MCPGatewayClient:
         if self.calls >= self.max_calls:
             raise RuntimeError("maximum MCP tool calls exceeded")
         self.calls += 1
-        return asyncio.run(self._call_async(tool_name, arguments))
+        try:
+            return asyncio.run(self._call_async(tool_name, arguments))
+        except BaseExceptionGroup as exc:
+            raise RuntimeError("MCP transport failed safely") from exc

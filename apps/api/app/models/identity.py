@@ -47,18 +47,28 @@ class UserRole(Base):
     __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_identity_user_role"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), index=True)
-    role_id: Mapped[str] = mapped_column(ForeignKey("identity_roles.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_users.id", ondelete="CASCADE"), index=True
+    )
+    role_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_roles.id", ondelete="CASCADE"), index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class RolePermission(Base):
     __tablename__ = "identity_role_permissions"
-    __table_args__ = (UniqueConstraint("role_id", "permission_id", name="uq_identity_role_permission"),)
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_id", name="uq_identity_role_permission"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    role_id: Mapped[str] = mapped_column(ForeignKey("identity_roles.id", ondelete="CASCADE"), index=True)
-    permission_id: Mapped[str] = mapped_column(ForeignKey("identity_permissions.id", ondelete="CASCADE"), index=True)
+    role_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_roles.id", ondelete="CASCADE"), index=True
+    )
+    permission_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_permissions.id", ondelete="CASCADE"), index=True
+    )
 
 
 class DatasetGrant(Base):
@@ -66,8 +76,12 @@ class DatasetGrant(Base):
     __table_args__ = (UniqueConstraint("user_id", "dataset_id", name="uq_identity_dataset_grant"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), index=True)
-    dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_users.id", ondelete="CASCADE"), index=True
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
     grant_type: Mapped[str] = mapped_column(String(40), default="synthetic_development")
     granted_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -76,11 +90,17 @@ class DatasetGrant(Base):
 
 class ReviewerAssignment(Base):
     __tablename__ = "identity_reviewer_assignments"
-    __table_args__ = (UniqueConstraint("user_id", "dataset_id", name="uq_identity_reviewer_assignment"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "dataset_id", name="uq_identity_reviewer_assignment"),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    user_id: Mapped[str] = mapped_column(ForeignKey("identity_users.id", ondelete="CASCADE"), index=True)
-    dataset_id: Mapped[str] = mapped_column(ForeignKey("datasets.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("identity_users.id", ondelete="CASCADE"), index=True
+    )
+    dataset_id: Mapped[str] = mapped_column(
+        ForeignKey("datasets.id", ondelete="CASCADE"), index=True
+    )
     review_type: Mapped[str] = mapped_column(String(80), default="synthetic_cohort")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -99,4 +119,7 @@ class AccessDecisionAudit(Base):
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     trace_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     details: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    canonical_digest: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    previous_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    integrity_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
