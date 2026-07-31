@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { apiBase } from "../lib/api";
 
 type Json = Record<string, unknown>;
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 function list(value: unknown): Json[] {
   return Array.isArray(value) ? value.filter((item): item is Json => typeof item === "object" && item !== null) : [];

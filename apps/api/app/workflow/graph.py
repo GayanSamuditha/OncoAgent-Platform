@@ -1,5 +1,6 @@
 """The Phase 3A persistent, approval-gated LangGraph workflow."""
 
+import time
 from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
@@ -12,6 +13,7 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.ingestion import Dataset
 from app.models.workflow import ApprovalDecision, ApprovalRequest
+from app.observability.metrics import WORKFLOW_NODE_DURATION, observe
 from app.observability.telemetry import span
 from app.retrieval.model_registry import provider_for
 from app.retrieval.search import postgres_fts_search, search
@@ -810,13 +812,27 @@ def _after_approval(state: WorkflowState) -> str:
 
 def _observed_node(name: str, function: Any) -> Any:
     """Create a bounded node span without changing graph state or topology."""
+
     def wrapped(state: WorkflowState) -> dict[str, Any]:
-        with span(
-            f"workflow.node.{name}",
-            get_settings(),
-            {"workflow.node": name, "workflow.run_id": state.get("run_id", "")},
-        ):
-            return cast(dict[str, Any], function(state))
+        started = time.perf_counter()
+        node_status = "completed"
+        try:
+            with span(
+                f"workflow.node.{name}",
+                get_settings(),
+                {"workflow.node": name, "workflow.run_id": state.get("run_id", "")},
+            ):
+                return cast(dict[str, Any], function(state))
+        except Exception:
+            node_status = "failed"
+            raise
+        finally:
+            observe(
+                WORKFLOW_NODE_DURATION,
+                time.perf_counter() - started,
+                {"node": name, "status": node_status},
+            )
+
     wrapped.__name__ = name
     return wrapped
 

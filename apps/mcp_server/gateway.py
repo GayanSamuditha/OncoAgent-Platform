@@ -24,7 +24,9 @@ from app.observability.metrics import (
     MCP_ERRORS,
     MCP_FALLBACKS,
     MCP_REQUESTS,
+    MCP_SERVICE,
     MCP_TOOL_CALLS,
+    SECURITY_TOOL_DENIALS,
     observe,
 )
 from app.observability.telemetry import current_trace_context, span
@@ -171,9 +173,11 @@ class MCPGateway:
             with span("mcp.authentication", self.settings, {"mcp.status": "checked"}):
                 identity = self._identity(context, stdio=stdio or self._stdio_mode)
             if tool_name not in self.registry:
+                observe(SECURITY_TOOL_DENIALS, labels={"reason": "unregistered_tool"})
                 raise MCPAuthError("unknown_tool", "tool is not registered")
             with span("mcp.authorization", self.settings, {"mcp.status": "checked"}):
                 if identity.actor_role not in self.registry[tool_name].descriptor.allowed_roles:
+                    observe(SECURITY_TOOL_DENIALS, labels={"reason": "role_denied"})
                     raise MCPAuthError("authorization_denied", "actor role is not allowed for this tool")
             request: Any = None
             validated_request: Any = None
@@ -214,9 +218,13 @@ class MCPGateway:
                 raise MCPAuthError("result_limit_exceeded", "MCP response exceeded the configured size limit")
             result_count = len(result.get("items", [])) if isinstance(result.get("items"), list) else 1
             self._audit(request_id, identity, tool_name, arguments, dataset_id, "success", started_at, (time.perf_counter() - started) * 1000, result_count, len(encoded), retrieval_lineage=lineage)
-            observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "success", "transport": "stdio" if stdio else "streamable-http"})
-            observe(MCP_TOOL_CALLS, labels={"tool": tool_name})
-            observe(MCP_DURATION, (time.perf_counter() - started), {"tool": tool_name})
+            observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "success", "transport": "stdio" if stdio else "streamable-http", "service": MCP_SERVICE})
+            observe(MCP_TOOL_CALLS, labels={"tool": tool_name, "service": MCP_SERVICE})
+            observe(
+                MCP_DURATION,
+                (time.perf_counter() - started),
+                {"tool": tool_name, "service": MCP_SERVICE},
+            )
             if lineage.get("fallbacks"):
                 for item in lineage["fallbacks"]:
                     observe(MCP_FALLBACKS, labels={"provider": str(item.get("to", "unknown"))})
@@ -241,12 +249,12 @@ class MCPGateway:
             category = "internal_safe_failure"
           if identity is not None:
               self._audit(request_id, identity, tool_name, arguments, dataset_id, "error", started_at, (time.perf_counter() - started) * 1000, 0, len(json.dumps(error)), error_category=category)
-          observe(MCP_ERRORS, labels={"tool": tool_name, "error_category": category})
+          observe(MCP_ERRORS, labels={"tool": tool_name, "error_category": category, "service": MCP_SERVICE})
           if category in {"authentication_failed", "unknown_client"}:
               observe(MCP_AUTH_FAILURES)
           if category == "dataset_not_allowed":
               observe(MCP_DATASET_DENIALS)
-          observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "error", "transport": "stdio" if stdio else "streamable-http"})
+          observe(MCP_REQUESTS, labels={"tool": tool_name, "status": "error", "transport": "stdio" if stdio else "streamable-http", "service": MCP_SERVICE})
           return {**error, "tool_name": tool_name, "tool_version": TOOL_VERSION, "correlation_id": request_id}
 
     def _register_tools(self) -> None:

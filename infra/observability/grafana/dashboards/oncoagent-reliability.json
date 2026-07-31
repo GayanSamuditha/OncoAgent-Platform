@@ -2,14 +2,14 @@
   "annotations": {"list": []},
   "editable": false,
   "panels": [
-    {"type":"timeseries","title":"Retry budget","targets":[{"expr":"oncoagent_performance_retry_budget","refId":"A"}]},
-    {"type":"timeseries","title":"Recovery duration","targets":[{"expr":"sum by (framework) (rate(oncoagent_performance_recovery_time_seconds_sum[5m]))","refId":"A"}]},
-    {"type":"timeseries","title":"Cancellation latency","targets":[{"expr":"sum by (framework) (rate(oncoagent_performance_cancellation_latency_seconds_sum[5m]))","refId":"A"}]},
-    {"type":"timeseries","title":"Development SLO status","targets":[{"expr":"oncoagent_performance_slo_status","refId":"A"}]},
-    {"type":"timeseries","title":"Overload rejections","targets":[{"expr":"sum by (queue) (rate(oncoagent_performance_overload_rejections_total[5m]))","refId":"A"}]}
+    {"type":"timeseries","title":"Retry count","targets":[{"expr":"sum by (activity) (increase(oncoagent_temporal_activity_retries_total[$__range]))","refId":"A"}]},
+    {"type":"timeseries","title":"Recovery duration","targets":[{"expr":"sum by (framework) (increase(oncoagent_performance_recovery_time_seconds_sum[$__range])) / clamp_min(sum by (framework) (increase(oncoagent_performance_recovery_time_seconds_count[$__range])), 1)","refId":"A"}]},
+    {"type":"timeseries","title":"Cancellation latency","targets":[{"expr":"sum by (framework) (increase(oncoagent_performance_cancellation_latency_seconds_sum[$__range])) / clamp_min(sum by (framework) (increase(oncoagent_performance_cancellation_latency_seconds_count[$__range])), 1)","refId":"A"}]},
+    {"type":"timeseries","title":"Development SLO success ratio","targets":[{"expr":"sum(increase(oncoagent_http_requests_total{status_class=~\"2xx|3xx\"}[$__range])) / clamp_min(sum(increase(oncoagent_http_requests_total[$__range])), 1)","refId":"A"}]},
+    {"type":"timeseries","title":"Overload rejections","targets":[{"expr":"sum by (queue) (increase(oncoagent_performance_overload_rejections_total[$__range]))","refId":"A"}]}
   ],
   "schemaVersion": 39,
   "title": "OncoAgent Reliability",
   "uid": "oncoagent-reliability",
-  "version": 1
+  "version": 2
 }

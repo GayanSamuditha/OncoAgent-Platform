@@ -2,13 +2,13 @@
   "annotations": {"list": []},
   "editable": false,
   "panels": [
-    {"type":"timeseries","title":"Workflow outcomes","targets":[{"expr":"sum by (status) (rate(oncoagent_workflow_runs_total[5m]))","refId":"A"}]},
-    {"type":"timeseries","title":"CrewAI outcomes","targets":[{"expr":"sum by (status) (rate(oncoagent_crew_runs_total[5m]))","refId":"A"}]},
-    {"type":"timeseries","title":"MCP calls by tool","targets":[{"expr":"sum by (tool) (rate(oncoagent_mcp_tool_calls_total[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"Workflow outcomes","targets":[{"expr":"sum by (status) (increase(oncoagent_workflow_runs_total[$__range]))","refId":"A"}]},
+    {"type":"timeseries","title":"CrewAI outcomes","targets":[{"expr":"sum by (outcome) (increase(oncoagent_crew_runs_total{job=\"oncoagent-temporal-worker\",framework=\"crewai\",workflow_type=\"oncology_research\"}[$__range]))","refId":"A"}]},
+    {"type":"timeseries","title":"MCP calls by tool","targets":[{"expr":"sum by (tool) (increase(oncoagent_mcp_tool_calls_total{job=\"oncoagent-mcp\"}[$__range]))","refId":"A"}]},
     {"type":"timeseries","title":"Model duration","targets":[{"expr":"sum by (model) (rate(oncoagent_model_request_duration_seconds_sum[5m]))","refId":"A"}]}
   ],
   "schemaVersion": 39,
   "title": "OncoAgent Operations",
   "uid": "oncoagent-operations",
-  "version": 1
+  "version": 2
 }

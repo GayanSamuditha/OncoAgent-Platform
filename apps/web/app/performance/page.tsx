@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
 type Json = Record<string, unknown>;
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export default function PerformancePage() {
   const [policy, setPolicy] = useState<Json | null>(null);
@@ -12,8 +12,8 @@ export default function PerformancePage() {
   const [error, setError] = useState(false);
   useEffect(() => {
     Promise.all([
-      fetch(`${apiBase}/api/v1/performance/policy`, { cache: "no-store" }).then((response) => { if (!response.ok) throw new Error("policy"); return response.json(); }),
-      fetch(`${apiBase}/api/v1/performance`, { cache: "no-store" }).then((response) => { if (!response.ok) throw new Error("history"); return response.json(); }),
+      fetch(`${apiBase}/api/v1/performance/policy`, { credentials: "include", cache: "no-store" }).then((response) => { if (!response.ok) throw new Error("policy"); return response.json(); }),
+      fetch(`${apiBase}/api/v1/performance`, { credentials: "include", cache: "no-store" }).then((response) => { if (!response.ok) throw new Error("history"); return response.json(); }),
     ]).then(([policyResult, historyResult]) => { setPolicy(policyResult); setHistory(historyResult); }).catch(() => setError(true));
   }, []);
   const items = Array.isArray(history?.items) ? history.items as Json[] : [];

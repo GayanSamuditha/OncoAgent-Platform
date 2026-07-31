@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from app.api import routes
 from app.identity.service import AuthenticatedUser
+from app.observability.metrics import SECURITY_SELF_APPROVAL_DENIALS
 
 
 class SessionContext:
@@ -51,6 +52,8 @@ def test_creator_cannot_decide_through_review_path(monkeypatch) -> None:
     monkeypatch.setattr(routes, "SessionLocal", lambda: SessionContext())
     monkeypatch.setattr(routes, "require_dataset", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(routes, "require_permission", lambda *_args, **_kwargs: None)
+    before = SECURITY_SELF_APPROVAL_DENIALS._value.get()
     with pytest.raises(HTTPException) as exc:
         routes._review_authorized_crew_get("run-a", creator, deciding=True)
     assert exc.value.status_code == 403
+    assert SECURITY_SELF_APPROVAL_DENIALS._value.get() == before + 1

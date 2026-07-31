@@ -51,9 +51,14 @@ def validate_runtime_settings(settings: Settings, *, service: str = "api") -> li
             issues.append(
                 ConfigIssue("CREWAI_EXECUTION_MODE", "worker requires explicit temporal mode")
             )
-    if service == "worker":
-        if not settings.crewai_mcp_url or not settings.crewai_mcp_client_id:
-            issues.append(ConfigIssue("CREWAI_MCP_URL/CLIENT_ID", "are required for the worker"))
+    if settings.crewai_enabled and service in {"api", "worker"}:
+        mcp_endpoint = urlparse(settings.crewai_mcp_url)
+        if mcp_endpoint.scheme not in {"http", "https"} or not mcp_endpoint.netloc:
+            issues.append(ConfigIssue("CREWAI_MCP_URL", "must be an absolute HTTP(S) URL"))
+        if not settings.crewai_mcp_client_id:
+            issues.append(ConfigIssue("CREWAI_MCP_CLIENT_ID", "is required for CrewAI"))
+        if not settings.crewai_mcp_token:
+            issues.append(ConfigIssue("CREWAI_MCP_TOKEN", "is required for CrewAI"))
         if not settings.crewai_mcp_dataset_ids:
             issues.append(ConfigIssue("CREWAI_MCP_DATASET_IDS", "requires an allowlisted dataset"))
     if settings.mcp_enabled and not settings.mcp_host:

@@ -28,7 +28,7 @@ from app.db.session import SessionLocal
 from app.models.identity import DatasetGrant, User
 
 BASE_URL = os.environ.get("PHASE6A_API_URL", "http://127.0.0.1:8000").rstrip("/")
-WEB_ORIGIN = os.environ.get("PHASE6A_WEB_ORIGIN", "http://localhost:3000")
+WEB_ORIGIN = os.environ.get("PHASE6A_WEB_ORIGIN", "http://127.0.0.1:3000")
 REPORT_DIR = ROOT / "evaluation_outputs" / "identity"
 POLL_SECONDS = 2
 POLL_LIMIT = 90

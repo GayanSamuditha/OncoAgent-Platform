@@ -1,0 +1,15 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type":"timeseries","title":"Activity retries","targets":[{"expr":"sum by (activity) (increase(oncoagent_temporal_activity_retries_total[$__range]))","refId":"A"}]},
+    {"type":"timeseries","title":"Worker recovery duration","targets":[{"expr":"sum by (failure_category) (increase(oncoagent_performance_recovery_time_seconds_sum[$__range])) / clamp_min(sum by (failure_category) (increase(oncoagent_performance_recovery_time_seconds_count[$__range])), 1)","refId":"A"}]},
+    {"type":"timeseries","title":"Cancellation completion latency","targets":[{"expr":"sum(increase(oncoagent_performance_cancellation_latency_seconds_sum[$__range])) / clamp_min(sum(increase(oncoagent_performance_cancellation_latency_seconds_count[$__range])), 1)","refId":"A"}]},
+    {"type":"timeseries","title":"Crew process interruptions","targets":[{"expr":"sum(increase(oncoagent_crew_process_interruptions_total{job=\"oncoagent-temporal-worker\"}[$__range]))","refId":"A"}]},
+    {"type":"timeseries","title":"Orphan MCP requests","targets":[{"expr":"max(oncoagent_orphan_mcp_requests{job=\"oncoagent-temporal-worker\"})","refId":"A"}]}
+  ],
+  "schemaVersion": 39,
+  "title": "OncoAgent Resilience",
+  "uid": "oncoagent-resilience",
+  "version": 1
+}

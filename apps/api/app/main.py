@@ -16,10 +16,14 @@ from app.core.logging import configure_logging
 from app.core.runtime_config import validate_runtime_settings
 from app.observability.metrics import (
     ACTIVE_REQUESTS,
+    API_SERVICE,
     HTTP_DURATION,
     HTTP_ERRORS,
     HTTP_REQUESTS,
+    initialize_service_metrics,
     observe,
+    observe_unsafe_prevention,
+    observe_validation_failure,
 )
 from app.observability.telemetry import configure, current_trace_context
 from app.performance.limits import reset_workflow_capacity
@@ -40,6 +44,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # from a previous test/client task or a prior reload.
     reset_workflow_capacity(settings.api_workflow_concurrency)
     configure_logging(settings.log_level)
+    initialize_service_metrics(API_SERVICE)
     configure(settings)
     try:
         recovered = recover_incomplete_runs()
@@ -87,15 +92,15 @@ def create_app() -> FastAPI:
             return JSONResponse(
                 status_code=413, content={"detail": "request body exceeds configured limit"}
             )
-        route = (
-            request.url.path
-            if request.url.path in {"/health", "/ready", "/metrics"}
-            else request.url.path
-        )
+        route = request.url.path
         started = time.perf_counter()
         observe(ACTIVE_REQUESTS, labels={"service": settings.otel_service_name})
         try:
             response = await call_next(request)
+            matched_route = request.scope.get("route")
+            route_template = getattr(matched_route, "path", None)
+            if isinstance(route_template, str) and route_template:
+                route = route_template
             trace_id = current_trace_context()["trace_id"]
             status_class = f"{response.status_code // 100}xx"
             observe(
@@ -116,6 +121,9 @@ def create_app() -> FastAPI:
                         "error_category": "server_error",
                     },
                 )
+            if response.status_code == 422:
+                observe_unsafe_prevention("request_validation")
+                observe_validation_failure("request", API_SERVICE)
             response.headers.setdefault("X-Trace-Id", trace_id or "")
             if settings.security_headers_enabled:
                 response.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -143,6 +151,10 @@ def create_app() -> FastAPI:
             )
             raise
         finally:
+            matched_route = request.scope.get("route")
+            route_template = getattr(matched_route, "path", None)
+            if isinstance(route_template, str) and route_template:
+                route = route_template
             observe(
                 HTTP_DURATION,
                 (time.perf_counter() - started),

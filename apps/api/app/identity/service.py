@@ -29,6 +29,7 @@ from app.observability.metrics import (
     SECURITY_DATASET_DENIALS,
     SECURITY_SELF_APPROVAL_DENIALS,
     observe,
+    observe_unsafe_prevention,
 )
 from app.observability.telemetry import current_trace_context
 from app.security.audit_integrity import INTEGRITY_VERSION, digest_for
@@ -291,6 +292,7 @@ def require_permission(
 ) -> None:
     if permission not in user.permissions:
         observe(SECURITY_AUTHZ_DENIALS, labels={"reason": "permission_denied"})
+        observe_unsafe_prevention("authorization")
         observe(IDENTITY_AUTHZ, labels={"decision": "deny", "reason": "permission_denied"})
         record_access(session, user, action, "permission", permission, "deny", "permission_denied")
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="permission denied")
@@ -303,6 +305,7 @@ def require_dataset(
     from app.models.ingestion import Dataset
 
     if session.get(Dataset, dataset_id) is None:
+        observe(SECURITY_DATASET_DENIALS)
         observe(IDENTITY_DATASET, labels={"decision": "deny"})
         record_access(session, user, action, "dataset", dataset_id, "deny", "dataset_not_found")
         raise HTTPException(status_code=404, detail="dataset not found")
@@ -340,6 +343,7 @@ def require_reviewer(
     require_dataset(user, dataset_id, session, action="review_dataset_access")
     if user.internal_id == creator_id or user.subject == creator_id:
         observe(SECURITY_SELF_APPROVAL_DENIALS)
+        observe_unsafe_prevention("self_approval")
         record_access(session, user, action, "review", None, "deny", "self_approval")
         raise HTTPException(status_code=403, detail="researcher cannot approve their own run")
     assignment = session.scalar(

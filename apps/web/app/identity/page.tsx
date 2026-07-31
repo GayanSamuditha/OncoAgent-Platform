@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+import { apiBase } from "../lib/api";
 
 export default function IdentityPage() {
   const [body, setBody] = useState<Record<string, unknown> | null>(null);
