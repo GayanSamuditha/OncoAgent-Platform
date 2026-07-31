@@ -1,8 +1,8 @@
 """Bounded local execution service and safe structured fallback."""
 
-import os
 import hashlib
 import json
+import os
 from typing import Any
 
 # Temporal workers are non-interactive.  Keep CrewAI's optional hosted
@@ -26,6 +26,8 @@ class CrewExecutionService:
             "used_fallback": False,
             "fallback_reason": None,
             "task_summaries": {},
+            "task_durations_seconds": {},
+            "task_statuses": {},
         }
 
     def deterministic_run(self, request: CrewRunRequest, run_id: str) -> SyntheticResearchBrief:
@@ -93,6 +95,10 @@ class CrewExecutionService:
     def run(self, request: CrewRunRequest, run_id: str) -> SyntheticResearchBrief:
         allowed = {item for item in self.settings.crewai_mcp_dataset_ids.split(",") if item}
         validate_request(request, allowed)
+        task_durations_seconds: dict[str, float] = {}
+        task_statuses: dict[str, str] = {}
+        crew: Any | None = None
+
         try:
             from .crew import build_crew
 
@@ -101,9 +107,20 @@ class CrewExecutionService:
                 if request.model_profile == "automatic"
                 else request.model_profile
             )
-            result = build_crew(self.client, model, self.settings).kickoff(
+            crew = build_crew(self.client, model, self.settings)
+            result = crew.kickoff(
                 inputs={"run_id": run_id, **request.model_dump(exclude={"actor_context"})}
             )
+            task_durations_seconds = {
+                str(task.name): (task.end_time - task.start_time).total_seconds()
+                for task in crew.tasks
+                if task.name and task.start_time is not None and task.end_time is not None
+            }
+            task_statuses = {
+                str(task.name): "completed"
+                for task in crew.tasks
+                if task.name and task.output is not None
+            }
             output = getattr(result, "pydantic", None)
             if output is None:
                 raise ValueError("CrewAI output did not satisfy the required brief schema")
@@ -115,10 +132,23 @@ class CrewExecutionService:
                 "fallback_reason": None,
                 "fallback_category": None,
                 "task_summaries": summarize_task_outputs(result),
+                "task_durations_seconds": task_durations_seconds,
+                "task_statuses": task_statuses,
             }
             validate_brief(brief, run_id, request.dataset_id)
             return brief
         except Exception as exc:
+            if crew is not None:
+                task_durations_seconds = {
+                    str(task.name): (task.end_time - task.start_time).total_seconds()
+                    for task in crew.tasks
+                    if task.name and task.start_time is not None and task.end_time is not None
+                }
+                task_statuses = {
+                    str(task.name): "completed" if task.output is not None else "failed"
+                    for task in crew.tasks
+                    if task.name and task.start_time is not None
+                }
             # No unsafe partial output is returned. The caller records the
             # fallback event and may invoke deterministic_run explicitly.
             self.last_execution = {
@@ -126,6 +156,8 @@ class CrewExecutionService:
                 "fallback_reason": type(exc).__name__,
                 "fallback_category": _fallback_category(exc),
                 "task_summaries": {},
+                "task_durations_seconds": task_durations_seconds,
+                "task_statuses": task_statuses,
             }
             return self.deterministic_run(request, run_id)
 

@@ -1,0 +1,45 @@
+{
+  "k6_image": "grafana/k6:0.54.0",
+  "browser_base_url": "http://127.0.0.1:3000",
+  "api_base_url": "http://127.0.0.1:8000",
+  "mcp_base_url": "http://127.0.0.1:8010",
+  "prometheus_base_url": "http://127.0.0.1:9090",
+  "grafana_base_url": "http://127.0.0.1:3001",
+  "dataset_name": "synthea-eval-100",
+  "dataset_id": "6b15ce38-e12c-4482-866e-59d333952024",
+  "correlation_prefix": "loadtest-",
+  "output_directory": "loadtest_outputs",
+  "limits": {
+    "normal": {
+      "read_rps": 100,
+      "mcp_rps": 30,
+      "workflow_start_rps": 1,
+      "langgraph_concurrency": 10,
+      "crewai_concurrency": 4,
+      "workflow_total": 50,
+      "single_duration_seconds": 600,
+      "suite_duration_seconds": 1800
+    },
+    "high": {
+      "read_rps": 200,
+      "mcp_rps": 50,
+      "workflow_start_rps": 2,
+      "langgraph_concurrency": 10,
+      "crewai_concurrency": 8,
+      "workflow_total": 100,
+      "single_duration_seconds": 600,
+      "suite_duration_seconds": 1800
+    }
+  },
+  "profiles": {
+    "smoke": {"duration_seconds": 30, "virtual_users": 2, "maximum_rps": 10},
+    "baseline": {"duration_seconds": 300, "start_rps": 5, "maximum_rps": 25, "virtual_users": 40},
+    "sustained": {"duration_seconds": 300, "maximum_rps": 50, "virtual_users": 80},
+    "burst": {"duration_seconds": 120, "start_rps": 20, "maximum_rps": 100, "recovery_rps": 10, "virtual_users": 120},
+    "mcp": {"duration_seconds": 180, "maximum_rps": 30, "virtual_users": 40},
+    "governance": {"duration_seconds": 120, "maximum_rps": 5, "virtual_users": 2},
+    "langgraph": {"total_runs": 4, "concurrency": 1, "maximum_runs": 20},
+    "crewai": {"total_runs": 2, "concurrency": 2, "maximum_runs": 8},
+    "overload": {"total_attempts": 12, "concurrency": 12}
+  }
+}

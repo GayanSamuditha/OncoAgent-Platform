@@ -1,7 +1,7 @@
 import { chromium } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3000";
 const output = process.env.DEMO_SCREENSHOT_DIR ?? "../../demo_outputs/client-demo-validation/screenshots";
 const video = process.env.DEMO_VIDEO_DIR ?? "../../demo_outputs/client-demo-validation/video";
 await mkdir(output, { recursive: true });

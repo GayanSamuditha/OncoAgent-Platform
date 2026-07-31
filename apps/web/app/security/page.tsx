@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
 type Json = Record<string, unknown>;
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export default function SecurityPage() {
   const [policy, setPolicy] = useState<Json | null>(null);
@@ -13,9 +13,9 @@ export default function SecurityPage() {
   const [error, setError] = useState(false);
   useEffect(() => {
     Promise.all([
-      fetch(`${apiBase}/api/v1/security/policy`, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("policy"); return r.json(); }),
-      fetch(`${apiBase}/api/v1/security/assessments`, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("assessment"); return r.json(); }),
-      fetch(`${apiBase}/api/v1/security/audit-integrity`, { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("integrity"); return r.json(); }),
+      fetch(`${apiBase}/api/v1/security/policy`, { credentials: "include", cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("policy"); return r.json(); }),
+      fetch(`${apiBase}/api/v1/security/assessments`, { credentials: "include", cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("assessment"); return r.json(); }),
+      fetch(`${apiBase}/api/v1/security/audit-integrity`, { credentials: "include", cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("integrity"); return r.json(); }),
     ]).then(([policyResult, assessmentResult, integrityResult]) => {
       setPolicy(policyResult); setAssessment(assessmentResult); setIntegrity(integrityResult);
     }).catch(() => setError(true));

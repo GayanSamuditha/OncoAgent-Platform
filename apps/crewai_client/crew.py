@@ -89,12 +89,14 @@ def build_crew(client: Any, model: str, settings: Any) -> Any:
         verbose=False,
     )
     t1 = Task(
+        name="candidate_discovery",
         description="Return only a CandidateDiscoveryResult for the bounded request. Do not expose reasoning.",
         expected_output="Validated CandidateDiscoveryResult JSON.",
         agent=researcher,
         output_pydantic=CandidateDiscoveryResult,
     )
     t2 = Task(
+        name="structured_evidence_collection",
         description="Using only the validated candidate result, return StructuredEvidenceResult JSON with provenance.",
         expected_output="Validated StructuredEvidenceResult JSON.",
         agent=investigator,
@@ -102,6 +104,7 @@ def build_crew(client: Any, model: str, settings: Any) -> Any:
         output_pydantic=StructuredEvidenceResult,
     )
     t3 = Task(
+        name="eligibility_evidence_review",
         description="Using only validated prior JSON, return EligibilityReviewResult. review_required must be true.",
         expected_output="Validated EligibilityReviewResult JSON.",
         agent=reviewer,
@@ -109,6 +112,7 @@ def build_crew(client: Any, model: str, settings: Any) -> Any:
         output_pydantic=EligibilityReviewResult,
     )
     t4 = Task(
+        name="research_brief_generation",
         description="Using only validated prior JSON, return SyntheticResearchBrief. It must await human review.",
         expected_output="Validated SyntheticResearchBrief JSON.",
         agent=writer,

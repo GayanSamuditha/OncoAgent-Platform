@@ -56,7 +56,9 @@ from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
 from app.observability.metrics import (
     PERFORMANCE_OVERLOAD_REJECTIONS,
     PERFORMANCE_QUEUE_WAIT,
+    SECURITY_SELF_APPROVAL_DENIALS,
     observe,
+    observe_unsafe_prevention,
     prometheus_payload,
 )
 from app.observability.telemetry import observability_status
@@ -327,10 +329,6 @@ def assign_identity_dataset(
     return {"status": "updated", "user_id": user_id, "dataset_id": request.value}
 
 
-def _crew_actor(actor: AuthenticatedUser) -> CrewActorContext:
-    return CrewActorContext(actor_id=actor.actor_id, actor_role=actor.role)
-
-
 def _require_run_access(
     actor: AuthenticatedUser, dataset_id: str, creator_id: str, session: Session, *, action: str
 ) -> None:
@@ -589,6 +587,8 @@ def _review_authorized_crew_get(
         if is_creator:
             require_permission(actor, "workflow:read-own", session, action="crew_review_read")
             if deciding:
+                observe(SECURITY_SELF_APPROVAL_DENIALS)
+                observe_unsafe_prevention("self_approval")
                 record_access(
                     session, actor, "review_decision", "review", run_id, "deny", "self_approval"
                 )

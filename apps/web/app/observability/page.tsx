@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiBase } from "../lib/api";
 
 type Json = Record<string, unknown>;
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 async function read(path: string): Promise<Json> {
-  const response = await fetch(`${apiBase}${path}`, { cache: "no-store", headers: { "X-Actor-Id": "observability-console", "X-Actor-Role": "admin" } });
+  const response = await fetch(`${apiBase}${path}`, { credentials: "include", cache: "no-store" });
   if (!response.ok) throw new Error("unavailable");
   return response.json() as Promise<Json>;
 }

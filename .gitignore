@@ -156,7 +156,9 @@ demo_outputs/
 apps/web/playwright-report/
 apps/web/test-results/
 performance_outputs/
+loadtest_outputs/
 backups/
+.idea/
 .envrc
 .venv
 env/

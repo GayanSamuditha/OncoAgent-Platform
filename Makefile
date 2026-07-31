@@ -2,7 +2,7 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify security-verify retention-dry-run db-up db-down observability-up observability-down migrate demo-up demo-down demo-status demo-check demo-prepare demo-populate demo-populate-research demo-populate-operations demo-guided demo-auto demo-record demo-report demo-reset test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify security-verify retention-dry-run db-up db-down observability-up observability-down migrate demo-up demo-down demo-status demo-check demo-prepare demo-populate demo-populate-research demo-populate-operations demo-guided demo-auto demo-record demo-report demo-reset load-check load-smoke load-baseline load-sustained load-burst load-mcp load-langgraph load-crewai load-governance load-retry load-recovery load-cancel load-overload load-slo load-all load-status load-report load-grafana-capture test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
 
 help:
 	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify retention-dry-run security-verify check'
@@ -110,11 +110,11 @@ demo-prepare: migrate verify-data
 	@echo 'No records are inserted or deleted by this target; use seed-synthetic only when a Synthea archive is explicitly provided.'
 
 demo-up:
-	@test -f .env.demo || cp .env.demo.example .env.demo
-	docker compose --env-file .env.demo -f infra/docker-compose.yml --profile full up -d --build
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/prepare_demo_env.py
+	/Applications/Docker.app/Contents/Resources/bin/docker compose -p oncoagent --env-file .env.demo -f infra/docker-compose.yml --profile full up -d --build
 
 demo-down:
-	docker compose --env-file .env.demo -f infra/docker-compose.yml --profile full down
+	/Applications/Docker.app/Contents/Resources/bin/docker compose -p oncoagent --env-file .env.demo -f infra/docker-compose.yml --profile full down
 
 demo-status:
 	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py status
@@ -132,7 +132,7 @@ demo-populate-operations:
 	@if [ -n "$${DEMO_ID:-}" ]; then PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py operations --demo-id "$${DEMO_ID}"; else PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python scripts/demo_orchestrator.py operations; fi
 
 demo-guided:
-	@echo 'Open http://localhost:3000/demo after demo-populate completes.'
+	@echo 'Open http://127.0.0.1:3000/demo after demo-populate completes.'
 
 demo-auto: demo-check demo-prepare demo-populate
 
@@ -149,6 +149,60 @@ demo-reset:
 	else \
 		PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/demo_reset.py --demo-id "$${DEMO_ID}"; \
 	fi
+
+load-check:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py check
+
+load-smoke:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py smoke
+
+load-baseline:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py baseline
+
+load-sustained:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py sustained
+
+load-burst:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py burst
+
+load-mcp:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py mcp
+
+load-langgraph:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py langgraph
+
+load-crewai:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py crewai
+
+load-governance:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py governance
+
+load-retry:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py retry
+
+load-recovery:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py recovery
+
+load-cancel:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py cancel
+
+load-overload:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py overload
+
+load-slo:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py slo
+
+load-all:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py all
+
+load-status:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py status
+
+load-report:
+	PYTHONPATH=apps/api:apps:loadtests $(API_DIR)/.venv/bin/python loadtests/run.py report
+
+load-grafana-capture:
+	cd $(WEB_DIR) && npm run load:grafana-capture
 
 validate-config:
 	PYTHONPATH=$(API_DIR) python3 scripts/validate_config.py --service api

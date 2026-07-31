@@ -15,7 +15,7 @@ class Settings(BaseSettings):
         default="postgresql+psycopg://oncoagent:oncoagent_dev@localhost:5432/oncoagent",
         validation_alias="DATABASE_URL",
     )
-    cors_origins: list[str] = ["http://localhost:3000"]
+    cors_origins: list[str] = ["http://127.0.0.1:3000"]
     clinical_embedding_model: str = Field(
         default="emilyalsentzer/Bio_ClinicalBERT", validation_alias="CLINICAL_EMBEDDING_MODEL"
     )
@@ -216,6 +216,9 @@ class Settings(BaseSettings):
     )
     prometheus_metrics_path: str = Field(
         default="/metrics", validation_alias="PROMETHEUS_METRICS_PATH"
+    )
+    prometheus_metrics_port: int = Field(
+        default=0, ge=0, le=65535, validation_alias="PROMETHEUS_METRICS_PORT"
     )
     structured_logging_enabled: bool = Field(
         default=True, validation_alias="STRUCTURED_LOGGING_ENABLED"

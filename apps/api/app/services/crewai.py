@@ -25,10 +25,6 @@ from app.models.crewai import (
     CrewRun,
     CrewTask,
 )
-from app.observability.metrics import (
-    CREW_RUNS,
-    observe,
-)
 from app.observability.telemetry import current_trace_context, span
 
 _active_run: str | None = None
@@ -393,7 +389,6 @@ def _execute_inner(run_id: str, request: CrewRunRequest, settings: Any) -> None:
         # it, so terminal status is always rechecked from PostgreSQL on the
         # next submission.
         _active_run = None
-        observe(CREW_RUNS, labels={"status": "completed"})
 
 
 def cancel_run(run_id: str, actor_id: str) -> CrewRun | None:
