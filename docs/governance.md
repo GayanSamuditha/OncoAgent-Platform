@@ -78,3 +78,12 @@ Phase 4D validates required-criterion provenance, CrewAI lifecycle events,
 MCP correlation, output consistency, dataset isolation, and mandatory human
 review. Failed gates remain visible in the scorecard; they do not become a
 single composite score or a production-readiness claim.
+## Identity and access governance
+
+Authentication establishes a local OIDC-compatible subject; application RBAC,
+dataset grants, and reviewer assignments authorize actions. MCP retains its
+own service identity and dataset/tool checks. Temporal receives only a bounded
+application review decision after FastAPI authorization and persistence.
+Researcher and reviewer identities are compared by internal identity mapping,
+not browser-supplied fields. Access decisions are append-only and synthetic
+development data remains the only data policy.

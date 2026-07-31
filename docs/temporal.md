@@ -108,3 +108,10 @@ An in-flight cancellation is observed at the next safe Activity checkpoint
 or immediately after the bounded CrewAI call returns. Partial business
 records remain inspectable; finalization is prevented. Recovery is never
 claimed at a token-generation position.
+## Identity boundary
+
+Temporal review signals are never accepted from browser credentials directly.
+FastAPI validates the authenticated application user, permission, dataset grant,
+reviewer assignment, enabled state, and separation of duties before persisting
+the bounded decision and signaling the workflow. Temporal remains the durable
+executor; application authorization and audit records remain authoritative.

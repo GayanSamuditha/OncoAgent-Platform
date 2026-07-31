@@ -14,3 +14,10 @@ error mapping. Search accepts only `medcpt`, `bioclinicalbert`, or
 MCP exposes no SQL, shell, filesystem, export, approval, model-selection, or
 audit-mutation tool. Development tokens are configured only through ignored
 `.env` values and are never returned by inspection APIs.
+## Application identity and MCP
+
+Application sessions are not forwarded to MCP. CrewAI and other downstream
+clients continue using their configured service identity, while MCP separately
+enforces client authentication, role-scoped tools, dataset allowlists, and
+structured audit lineage. Application dataset grants are an additional gate,
+not a replacement for MCP authorization.

@@ -187,6 +187,18 @@ class Settings(BaseSettings):
     prometheus_metrics_enabled: bool = Field(default=True, validation_alias="PROMETHEUS_METRICS_ENABLED")
     prometheus_metrics_path: str = Field(default="/metrics", validation_alias="PROMETHEUS_METRICS_PATH")
     structured_logging_enabled: bool = Field(default=True, validation_alias="STRUCTURED_LOGGING_ENABLED")
+    identity_enabled: bool = Field(default=True, validation_alias="IDENTITY_ENABLED")
+    identity_issuer: str = Field(default="http://127.0.0.1:8000/local-oidc", validation_alias="IDENTITY_ISSUER")
+    identity_audience: str = Field(default="oncoagent-platform", validation_alias="IDENTITY_AUDIENCE")
+    identity_signing_secret: str = Field(default="local-development-only-change-me", validation_alias="IDENTITY_SIGNING_SECRET")
+    identity_session_cookie: str = Field(default="oncoagent_session", validation_alias="IDENTITY_SESSION_COOKIE")
+    identity_session_ttl_seconds: int = Field(default=3600, ge=60, le=86400, validation_alias="IDENTITY_SESSION_TTL_SECONDS")
+    identity_cookie_secure: bool = Field(default=False, validation_alias="IDENTITY_COOKIE_SECURE")
+    identity_dev_users: str = Field(default="", validation_alias="IDENTITY_DEV_USERS")
+    identity_allowed_roles: list[str] = [
+        "researcher", "reviewer", "governance_officer", "platform_operator", "auditor", "administrator"
+    ]
+    identity_legacy_headers_enabled: bool = Field(default=True, validation_alias="IDENTITY_LEGACY_HEADERS_ENABLED")
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[4] / ".env", extra="ignore", populate_by_name=True

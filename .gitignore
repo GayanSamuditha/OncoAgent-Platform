@@ -254,6 +254,11 @@ huggingface_cache/
 transformers_cache/
 torch_cache/
 *.tsbuildinfo
+
+# Local identity and authorization validation reports
+evaluation_outputs/identity/
+identity_provider_data/
+local_sessions/
 observability-data/
 infra/observability/data/
 *.log

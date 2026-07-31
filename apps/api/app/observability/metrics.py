@@ -66,6 +66,10 @@ TEMPORAL_WORKFLOWS = _counter("oncoagent_temporal_workflows_total", "Temporal wo
 TEMPORAL_ACTIVITIES = _counter("oncoagent_temporal_activities_total", "Temporal Activity outcomes", ("activity", "status"))
 TEMPORAL_RETRIES = _counter("oncoagent_temporal_activity_retries_total", "Temporal Activity retries", ("activity",))
 TEMPORAL_REVIEW_WAITS = _gauge("oncoagent_temporal_workflows_waiting_for_review", "Temporal workflows waiting for review")
+IDENTITY_AUTH = _counter("oncoagent_identity_authentication_total", "Identity authentication outcomes", ("outcome",))
+IDENTITY_AUTHZ = _counter("oncoagent_identity_authorization_total", "Authorization outcomes", ("decision", "reason"))
+IDENTITY_DATASET = _counter("oncoagent_identity_dataset_access_total", "Dataset access outcomes", ("decision",))
+IDENTITY_REVIEW = _counter("oncoagent_identity_review_authority_total", "Review authority outcomes", ("decision", "reason"))
 
 
 def observe(metric: Any, value: float = 1.0, labels: dict[str, str] | None = None) -> None:

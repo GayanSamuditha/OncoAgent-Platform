@@ -183,3 +183,11 @@ Temporal retries are bounded and typed. Safety, authorization, dataset, and
 governance failures are non-retryable. Recovery is from the last completed
 Activity boundary or safe heartbeat, not from a model token position. Legacy
 CrewAI execution remains available only with the explicit `legacy` mode.
+## Phase 6A identity boundary
+
+The local console authenticates against a bounded OIDC-compatible development
+issuer. FastAPI validates signed claims and resolves the subject to an internal
+user, explicit permissions, synthetic dataset grants, and reviewer assignments.
+This authorization layer precedes workflow, evidence, audit, and Temporal
+review operations. Browser credentials are not forwarded to MCP; MCP keeps its
+separate service principal and policy boundary.

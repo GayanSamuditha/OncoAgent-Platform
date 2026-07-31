@@ -9,6 +9,16 @@ from app.models.crewai import (
     CrewRun,
     CrewTask,
 )
+from app.models.identity import (
+    AccessDecisionAudit,
+    DatasetGrant,
+    Permission,
+    ReviewerAssignment,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
 from app.models.ingestion import (
     Condition,
     Dataset,
@@ -76,4 +86,12 @@ __all__ = [
     "CrewOutput",
     "CrewReview",
     "CrewLineage",
+    "User",
+    "Role",
+    "Permission",
+    "UserRole",
+    "RolePermission",
+    "DatasetGrant",
+    "ReviewerAssignment",
+    "AccessDecisionAudit",
 ]

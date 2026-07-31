@@ -51,7 +51,14 @@ class CohortPlan(BaseModel):
 
 class ActorContext(BaseModel):
     actor_id: str = Field(min_length=1, max_length=200)
-    role: Literal["researcher", "reviewer", "admin"]
+    role: Literal[
+        "researcher",
+        "reviewer",
+        "governance_officer",
+        "platform_operator",
+        "auditor",
+        "administrator",
+    ]
 
 
 class RunCreateRequest(BaseModel):

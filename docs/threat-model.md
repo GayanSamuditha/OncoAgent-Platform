@@ -24,5 +24,7 @@
 | MCP response exfiltration | Synthetic-only dataset policy, result/byte limits, approved structured fields, no raw FHIR | DLP and network policy |
 | Downstream CrewAI bypasses platform controls | MCP-only adapters, per-agent allowlists, client/dataset authorization, no direct DB/FHIR handles | Production identity and network enforcement |
 | CrewAI self-approval or unsupported brief | Structured outputs, provenance checks, mandatory separate human review, terminal decisions | External review service |
+| Identity spoofing or stale privilege | Signed local session claims, issuer/audience/expiry validation, server-side RBAC, dataset grants, disabled-user checks, append-only access decisions | Production OIDC federation and enterprise identity lifecycle |
+| Reviewer privilege abuse | Persisted reviewer assignment, dataset grant, separation of duties, terminal decision uniqueness | Hospital IAM and privileged access management |
 
 The Phase 0 API has no clinical-data endpoints and no export capability.
