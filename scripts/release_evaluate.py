@@ -10,19 +10,19 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "apps" / "api"))
 
-from app.db.session import SessionLocal  # noqa: E402
-from app.models.release_evaluation import (  # noqa: E402
+from app.db.session import SessionLocal
+from app.models.release_evaluation import (
     ReleaseCandidateRecord,
     ReleaseDecision,
     ReleaseEvaluationExecution,
     ReleaseGateResult,
     ReleaseMetricResult,
 )
-from app.release_evaluation.contracts import (  # noqa: E402
+from app.release_evaluation.contracts import (
     ReleaseCandidate,
     ReleaseEvaluationReport,
 )
-from app.release_evaluation.service import (  # noqa: E402
+from app.release_evaluation.service import (
     ROOT,
     evaluate_candidate,
     load_json,

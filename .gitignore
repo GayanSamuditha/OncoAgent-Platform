@@ -266,3 +266,8 @@ apps/crewai_client/.crewai/
 crewai_outputs/
 evaluations/crewai/outputs/
 evaluation_outputs/resilience/
+backups/
+temporal-data/
+prometheus-data/
+tempo-data/
+grafana-data/

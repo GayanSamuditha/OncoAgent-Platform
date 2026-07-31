@@ -11,7 +11,20 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-    Base.metadata.create_all(bind=op.get_bind(), checkfirst=True)
+    # Keep the revision boundary explicit.  Creating all imported models here
+    # would pre-create workflow, identity, and release tables owned by later
+    # migrations on a clean installation.
+    retrieval_tables = [
+        "clinical_documents",
+        "clinical_document_chunks",
+        "clinical_embeddings",
+        "indexing_runs",
+    ]
+    Base.metadata.create_all(
+        bind=op.get_bind(),
+        tables=[Base.metadata.tables[name] for name in retrieval_tables],
+        checkfirst=True,
+    )
 
 
 def downgrade() -> None:
