@@ -33,6 +33,13 @@ from app.models.ingestion import (
     Procedure,
 )
 from app.models.mcp import MCPRequest
+from app.models.release_evaluation import (
+    ReleaseCandidateRecord,
+    ReleaseDecision,
+    ReleaseEvaluationExecution,
+    ReleaseGateResult,
+    ReleaseMetricResult,
+)
 from app.models.retrieval import (
     ClinicalDocument,
     ClinicalDocumentChunk,
@@ -94,4 +101,9 @@ __all__ = [
     "DatasetGrant",
     "ReviewerAssignment",
     "AccessDecisionAudit",
+    "ReleaseCandidateRecord",
+    "ReleaseEvaluationExecution",
+    "ReleaseMetricResult",
+    "ReleaseGateResult",
+    "ReleaseDecision",
 ]

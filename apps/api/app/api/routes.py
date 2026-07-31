@@ -39,10 +39,16 @@ from app.models.crewai import (
 )
 from app.models.ingestion import FhirResource
 from app.models.mcp import MCPRequest
+from app.models.release_evaluation import (
+    ReleaseEvaluationExecution,
+    ReleaseGateResult,
+    ReleaseMetricResult,
+)
 from app.models.retrieval import ClinicalDocument, ClinicalDocumentChunk, IndexingRun
 from app.models.workflow import ApprovalRequest, WorkflowEvent, WorkflowRun
 from app.observability.metrics import prometheus_payload
 from app.observability.telemetry import observability_status
+from app.release_evaluation.policy import BLOCKING_GATES
 from app.repositories.ingestion import (
     get_dataset,
     get_ingestion_run,
@@ -137,19 +143,42 @@ def local_oidc_configuration(settings: Settings = Depends(get_settings)) -> dict
 
 
 @router.post("/api/v1/auth/login", response_model=IdentitySummary)
-def local_login(request: LocalLoginRequest, response: Response, settings: Settings = Depends(get_settings)) -> IdentitySummary:
+def local_login(
+    request: LocalLoginRequest, response: Response, settings: Settings = Depends(get_settings)
+) -> IdentitySummary:
     if not settings.identity_enabled:
         raise HTTPException(status_code=503, detail="identity authentication is disabled")
     with SessionLocal() as session:
         user = ensure_local_user(session, settings, request.user_key)
-        record_access(session, user, "login", "session", None, "allow", "local_identity_authenticated")
+        record_access(
+            session, user, "login", "session", None, "allow", "local_identity_authenticated"
+        )
         token = issue_session(user, settings)
-        response.set_cookie(settings.identity_session_cookie, token, httponly=True, secure=settings.identity_cookie_secure, samesite="lax", max_age=settings.identity_session_ttl_seconds, path="/")
-        return IdentitySummary(user_id=user.internal_id, subject=user.subject, display_name=user.display_name, role=user.role, permissions=sorted(user.permissions), dataset_ids=sorted(user.dataset_ids), issuer=user.issuer, expires_in_seconds=settings.identity_session_ttl_seconds)
+        response.set_cookie(
+            settings.identity_session_cookie,
+            token,
+            httponly=True,
+            secure=settings.identity_cookie_secure,
+            samesite="lax",
+            max_age=settings.identity_session_ttl_seconds,
+            path="/",
+        )
+        return IdentitySummary(
+            user_id=user.internal_id,
+            subject=user.subject,
+            display_name=user.display_name,
+            role=user.role,
+            permissions=sorted(user.permissions),
+            dataset_ids=sorted(user.dataset_ids),
+            issuer=user.issuer,
+            expires_in_seconds=settings.identity_session_ttl_seconds,
+        )
 
 
 @router.post("/api/v1/auth/logout")
-def local_logout(request: Request, response: Response, settings: Settings = Depends(get_settings)) -> dict[str, str]:
+def local_logout(
+    request: Request, response: Response, settings: Settings = Depends(get_settings)
+) -> dict[str, str]:
     with SessionLocal() as session:
         try:
             user = authenticate_request(request, session, settings)
@@ -161,8 +190,20 @@ def local_logout(request: Request, response: Response, settings: Settings = Depe
 
 
 @router.get("/api/v1/auth/me", response_model=IdentitySummary)
-def identity_me(actor: AuthenticatedUser = Depends(development_actor), settings: Settings = Depends(get_settings)) -> IdentitySummary:
-    return IdentitySummary(user_id=actor.internal_id, subject=actor.subject, display_name=actor.display_name, role=actor.role, permissions=sorted(actor.permissions), dataset_ids=sorted(actor.dataset_ids), issuer=actor.issuer, expires_in_seconds=settings.identity_session_ttl_seconds)
+def identity_me(
+    actor: AuthenticatedUser = Depends(development_actor),
+    settings: Settings = Depends(get_settings),
+) -> IdentitySummary:
+    return IdentitySummary(
+        user_id=actor.internal_id,
+        subject=actor.subject,
+        display_name=actor.display_name,
+        role=actor.role,
+        permissions=sorted(actor.permissions),
+        dataset_ids=sorted(actor.dataset_ids),
+        issuer=actor.issuer,
+        expires_in_seconds=settings.identity_session_ttl_seconds,
+    )
 
 
 @router.get("/api/v1/identity/users")
@@ -173,14 +214,37 @@ def identity_users(actor: AuthenticatedUser = Depends(development_actor)) -> dic
 
         users = []
         for user in session.scalars(select(User).order_by(User.created_at)):
-            role = session.scalar(select(Role.name).join(UserRole, UserRole.role_id == Role.id).where(UserRole.user_id == user.id))
-            datasets = list(session.scalars(select(DatasetGrant.dataset_id).where(DatasetGrant.user_id == user.id, DatasetGrant.enabled.is_(True))))
-            users.append({"user_id": user.id, "subject": user.external_subject, "display_name": user.display_name, "enabled": user.enabled, "role": role, "dataset_ids": datasets})
+            role = session.scalar(
+                select(Role.name)
+                .join(UserRole, UserRole.role_id == Role.id)
+                .where(UserRole.user_id == user.id)
+            )
+            datasets = list(
+                session.scalars(
+                    select(DatasetGrant.dataset_id).where(
+                        DatasetGrant.user_id == user.id, DatasetGrant.enabled.is_(True)
+                    )
+                )
+            )
+            users.append(
+                {
+                    "user_id": user.id,
+                    "subject": user.external_subject,
+                    "display_name": user.display_name,
+                    "enabled": user.enabled,
+                    "role": role,
+                    "dataset_ids": datasets,
+                }
+            )
     return {"items": users, "local_development_only": True}
 
 
 @router.post("/api/v1/identity/users/{user_id}/role")
-def assign_identity_role(user_id: str, request: IdentityAssignmentRequest, actor: AuthenticatedUser = Depends(development_actor)) -> dict[str, str]:
+def assign_identity_role(
+    user_id: str,
+    request: IdentityAssignmentRequest,
+    actor: AuthenticatedUser = Depends(development_actor),
+) -> dict[str, str]:
     with SessionLocal() as session:
         require_permission(actor, "identity:manage", session, action="identity_role_assign")
         from app.models.identity import Role, User, UserRole
@@ -189,15 +253,29 @@ def assign_identity_role(user_id: str, request: IdentityAssignmentRequest, actor
         role = session.scalar(select(Role).where(Role.name == request.value))
         if user is None or role is None:
             raise HTTPException(status_code=404, detail="identity or role not found")
-        assignment = session.scalar(select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role.id))
+        assignment = session.scalar(
+            select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role.id)
+        )
         if assignment is None:
             session.add(UserRole(id=str(uuid4()), user_id=user_id, role_id=role.id))
-        record_access(session, actor, "identity_role_assign", "user", user_id, "allow", "role_assignment_changed")
+        record_access(
+            session,
+            actor,
+            "identity_role_assign",
+            "user",
+            user_id,
+            "allow",
+            "role_assignment_changed",
+        )
     return {"status": "updated", "user_id": user_id, "role": request.value}
 
 
 @router.post("/api/v1/identity/users/{user_id}/dataset-grants")
-def assign_identity_dataset(user_id: str, request: IdentityAssignmentRequest, actor: AuthenticatedUser = Depends(development_actor)) -> dict[str, str]:
+def assign_identity_dataset(
+    user_id: str,
+    request: IdentityAssignmentRequest,
+    actor: AuthenticatedUser = Depends(development_actor),
+) -> dict[str, str]:
     with SessionLocal() as session:
         require_permission(actor, "identity:manage", session, action="identity_dataset_grant")
         from app.models.identity import DatasetGrant, User
@@ -205,13 +283,31 @@ def assign_identity_dataset(user_id: str, request: IdentityAssignmentRequest, ac
 
         if session.get(User, user_id) is None or session.get(Dataset, request.value) is None:
             raise HTTPException(status_code=404, detail="identity or dataset not found")
-        grant = session.scalar(select(DatasetGrant).where(DatasetGrant.user_id == user_id, DatasetGrant.dataset_id == request.value))
+        grant = session.scalar(
+            select(DatasetGrant).where(
+                DatasetGrant.user_id == user_id, DatasetGrant.dataset_id == request.value
+            )
+        )
         if grant is None:
-            grant = DatasetGrant(id=str(uuid4()), user_id=user_id, dataset_id=request.value, granted_by=actor.internal_id, enabled=request.enabled)
+            grant = DatasetGrant(
+                id=str(uuid4()),
+                user_id=user_id,
+                dataset_id=request.value,
+                granted_by=actor.internal_id,
+                enabled=request.enabled,
+            )
             session.add(grant)
         else:
             grant.enabled = request.enabled
-        record_access(session, actor, "identity_dataset_grant", "dataset", request.value, "allow", "dataset_grant_changed")
+        record_access(
+            session,
+            actor,
+            "identity_dataset_grant",
+            "dataset",
+            request.value,
+            "allow",
+            "dataset_grant_changed",
+        )
     return {"status": "updated", "user_id": user_id, "dataset_id": request.value}
 
 
@@ -219,7 +315,9 @@ def _crew_actor(actor: AuthenticatedUser) -> CrewActorContext:
     return CrewActorContext(actor_id=actor.actor_id, actor_role=actor.role)
 
 
-def _require_run_access(actor: AuthenticatedUser, dataset_id: str, creator_id: str, session: Session, *, action: str) -> None:
+def _require_run_access(
+    actor: AuthenticatedUser, dataset_id: str, creator_id: str, session: Session, *, action: str
+) -> None:
     require_dataset(actor, dataset_id, session, action=action)
     if creator_id != actor.actor_id and "workflow:read-all" not in actor.permissions:
         raise HTTPException(status_code=403, detail="run access denied")
@@ -323,13 +421,20 @@ def create_crew_run(
     with SessionLocal() as session:
         require_permission(actor, "workflow:create", session, action="crew_run_create")
         require_dataset(actor, request.dataset_id, session, action="crew_run_create")
-    if request.actor_context.actor_id != actor.actor_id or request.actor_context.actor_role != actor.role:
+    if (
+        request.actor_context.actor_id != actor.actor_id
+        or request.actor_context.actor_role != actor.role
+    ):
         # The authenticated session is authoritative.  Rejecting a mismatch
         # makes privilege-escalation attempts explicit while preserving a
         # sanitized contract for every accepted request.
-        raise HTTPException(status_code=403, detail="request actor context does not match authenticated identity")
+        raise HTTPException(
+            status_code=403, detail="request actor context does not match authenticated identity"
+        )
     if actor.role not in {"researcher", "reviewer", "administrator"}:
-        raise HTTPException(status_code=403, detail="identity is not authorized to run CrewAI research")
+        raise HTTPException(
+            status_code=403, detail="identity is not authorized to run CrewAI research"
+        )
     request = request.model_copy(
         update={
             "actor_context": CrewActorContext(
@@ -344,7 +449,9 @@ def create_crew_run(
         )
         if settings.crewai_execution_mode == "temporal":
             if not settings.temporal_enabled:
-                raise HTTPException(status_code=503, detail="Temporal execution is disabled by policy")
+                raise HTTPException(
+                    status_code=503, detail="Temporal execution is disabled by policy"
+                )
             run = create_crewai_run_record(request, settings, "temporal")
             workflow_id = f"crewai:{run.id}"
             with SessionLocal.begin() as session:
@@ -373,7 +480,9 @@ def create_crew_run(
                         failed.error_message = "Temporal execution is unavailable"
                         failed.temporal_execution_status = "unavailable"
                         failed.temporal_failure_type = "temporal_unavailable"
-                raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+                raise HTTPException(
+                    status_code=503, detail="Temporal execution is unavailable"
+                ) from exc
             with SessionLocal.begin() as session:
                 persisted = session.get(CrewRun, run.id)
                 if persisted:
@@ -388,7 +497,9 @@ def create_crew_run(
             "execution_mode": run.temporal_execution_mode,
             "temporal_workflow_id": run.temporal_workflow_id,
             "temporal_run_id": run.temporal_run_id,
-            "temporal_ui_url": settings.temporal_ui_url if run.temporal_execution_mode == "temporal" else None,
+            "temporal_ui_url": settings.temporal_ui_url
+            if run.temporal_execution_mode == "temporal"
+            else None,
             "created_at": run.created_at,
             "links": {
                 "self": f"/api/v1/crews/oncology-research/runs/{run.id}",
@@ -436,11 +547,17 @@ def _review_authorized_crew_get(
         if is_creator:
             require_permission(actor, "workflow:read-own", session, action="crew_review_read")
             if deciding:
-                record_access(session, actor, "review_decision", "review", run_id, "deny", "self_approval")
-                raise HTTPException(status_code=403, detail="researcher cannot approve their own run")
+                record_access(
+                    session, actor, "review_decision", "review", run_id, "deny", "self_approval"
+                )
+                raise HTTPException(
+                    status_code=403, detail="researcher cannot approve their own run"
+                )
         else:
             if not deciding:
-                require_permission(actor, "review:read-assigned", session, action="crew_review_read")
+                require_permission(
+                    actor, "review:read-assigned", session, action="crew_review_read"
+                )
             require_reviewer(
                 actor,
                 run.dataset_id,
@@ -559,9 +676,13 @@ def cancel_crew(run_id: str, actor: ActorContext = Depends(development_actor)) -
                 if persisted:
                     persisted.status = "cancellation_requested"
                     persisted.temporal_execution_status = "cancellation_requested"
-            temporal_run_sync(temporal_signal_cancel, get_settings(), run_before.temporal_workflow_id)
+            temporal_run_sync(
+                temporal_signal_cancel, get_settings(), run_before.temporal_workflow_id
+            )
         except TemporalUnavailable as exc:
-            raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+            raise HTTPException(
+                status_code=503, detail="Temporal execution is unavailable"
+            ) from exc
         return {"run_id": run_id, "status": "cancellation_requested", "execution_mode": "temporal"}
     try:
         run = cancel_crewai_run(run_id, actor.actor_id)
@@ -575,7 +696,9 @@ def cancel_crew(run_id: str, actor: ActorContext = Depends(development_actor)) -
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/review")
-def get_crew_review(run_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def get_crew_review(
+    run_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
     _review_authorized_crew_get(run_id, actor)
     with SessionLocal() as session:
         item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
@@ -594,7 +717,9 @@ def review_crew(
             require_permission(actor, "workflow:cancel-own", session, action="crew_review_cancel")
             require_dataset(actor, run.dataset_id, session, action="crew_review_cancel")
         elif decision.decision == "cancel":
-            require_reviewer(actor, run.dataset_id, session, run.actor_id, action="crew_review_cancel")
+            require_reviewer(
+                actor, run.dataset_id, session, run.actor_id, action="crew_review_cancel"
+            )
     if run.temporal_execution_mode == "temporal":
         with SessionLocal() as session:
             item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
@@ -617,7 +742,9 @@ def review_crew(
                 },
             )
         except TemporalUnavailable as exc:
-            raise HTTPException(status_code=503, detail="Temporal execution is unavailable") from exc
+            raise HTTPException(
+                status_code=503, detail="Temporal execution is unavailable"
+            ) from exc
         return {"run_id": run_id, "status": "review_signaled", "review_status": decision.decision}
     with SessionLocal.begin() as session:
         item = session.scalar(select(CrewReview).where(CrewReview.crew_run_id == run_id))
@@ -660,12 +787,20 @@ def review_crew(
 
 
 @router.get("/api/v1/crews/oncology-research/runs/{run_id}/temporal")
-def crew_temporal_status(run_id: str, _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def crew_temporal_status(
+    run_id: str, _: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
     run = _crew_get(run_id)
     if run.temporal_execution_mode != "temporal" or not run.temporal_workflow_id:
-        return {"execution_mode": run.temporal_execution_mode, "available": False, "status": run.status}
+        return {
+            "execution_mode": run.temporal_execution_mode,
+            "available": False,
+            "status": run.status,
+        }
     try:
-        status_data = temporal_run_sync(temporal_query_status, get_settings(), run.temporal_workflow_id)
+        status_data = temporal_run_sync(
+            temporal_query_status, get_settings(), run.temporal_workflow_id
+        )
     except TemporalUnavailable:
         status_data = {"status": "temporal_unavailable"}
     return {
@@ -682,16 +817,36 @@ def crew_temporal_status(run_id: str, _: ActorContext = Depends(development_acto
 
 
 @router.get("/api/v1/temporal/status")
-def temporal_status(settings: Settings = Depends(get_settings), actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def temporal_status(
+    settings: Settings = Depends(get_settings), actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
     with SessionLocal() as session:
         require_permission(actor, "temporal:read", session, action="temporal_status_read")
     if not settings.temporal_enabled:
-        return {"enabled": False, "available": False, "address": settings.temporal_address, "namespace": settings.temporal_namespace}
+        return {
+            "enabled": False,
+            "available": False,
+            "address": settings.temporal_address,
+            "namespace": settings.temporal_namespace,
+        }
     try:
         temporal_run_sync(temporal_connect, settings)
     except TemporalUnavailable:
-        return {"enabled": True, "available": False, "address": settings.temporal_address, "namespace": settings.temporal_namespace, "task_queue": settings.temporal_task_queue}
-    return {"enabled": True, "available": True, "address": settings.temporal_address, "namespace": settings.temporal_namespace, "task_queue": settings.temporal_task_queue, "ui_url": settings.temporal_ui_url}
+        return {
+            "enabled": True,
+            "available": False,
+            "address": settings.temporal_address,
+            "namespace": settings.temporal_namespace,
+            "task_queue": settings.temporal_task_queue,
+        }
+    return {
+        "enabled": True,
+        "available": True,
+        "address": settings.temporal_address,
+        "namespace": settings.temporal_namespace,
+        "task_queue": settings.temporal_task_queue,
+        "ui_url": settings.temporal_ui_url,
+    }
 
 
 def _run_response(run: WorkflowRun) -> RunResponse:
@@ -737,7 +892,9 @@ def create_workflow_run(
         with SessionLocal() as session:
             require_permission(actor, "workflow:create", session, action="workflow_create")
             require_dataset(actor, request.dataset_id, session, action="workflow_create")
-        workflow_actor = WorkflowActorContext.model_validate({"actor_id": actor.actor_id, "role": actor.role})
+        workflow_actor = WorkflowActorContext.model_validate(
+            {"actor_id": actor.actor_id, "role": actor.role}
+        )
         return _run_response(create_run(request, workflow_actor, settings))
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -779,7 +936,9 @@ def workflow_events(
     if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
     with SessionLocal() as session:
-        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_events_read")
+        _require_run_access(
+            actor, run.dataset_id, run.actor_id, session, action="workflow_events_read"
+        )
     items = list_events(run_id)
     start = (page - 1) * page_size
     return {
@@ -800,7 +959,9 @@ def workflow_evidence(
     if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
     with SessionLocal() as session:
-        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_evidence_read")
+        _require_run_access(
+            actor, run.dataset_id, run.actor_id, session, action="workflow_evidence_read"
+        )
         require_permission(actor, "evidence:read", session, action="workflow_evidence_read")
     items = list_evidence(run_id)
     start = (page - 1) * page_size
@@ -822,7 +983,9 @@ def workflow_candidates(
     if run is None:
         raise HTTPException(status_code=404, detail="workflow run not found")
     with SessionLocal() as session:
-        _require_run_access(actor, run.dataset_id, run.actor_id, session, action="workflow_candidates_read")
+        _require_run_access(
+            actor, run.dataset_id, run.actor_id, session, action="workflow_candidates_read"
+        )
     items = list_candidates(run_id)
     start = (page - 1) * page_size
     return {
@@ -1099,10 +1262,22 @@ def observability_services(settings: Settings = Depends(get_settings)) -> dict[s
     return {
         "services": [
             {"service": "oncoagent-api", "status": "configured", "transport": "otlp-grpc"},
-            {"service": "oncoagent-mcp", "status": "configured" if settings.mcp_enabled else "disabled", "transport": "streamable-http,stdio"},
-            {"service": "oncoagent-crewai", "status": "configured" if settings.crewai_enabled else "disabled", "transport": "local-worker"},
+            {
+                "service": "oncoagent-mcp",
+                "status": "configured" if settings.mcp_enabled else "disabled",
+                "transport": "streamable-http,stdio",
+            },
+            {
+                "service": "oncoagent-crewai",
+                "status": "configured" if settings.crewai_enabled else "disabled",
+                "transport": "local-worker",
+            },
             {"service": "oncoagent-web", "status": "configured", "transport": "http"},
-            {"service": "oncoagent-evaluation-worker", "status": "configured", "transport": "local"},
+            {
+                "service": "oncoagent-evaluation-worker",
+                "status": "configured",
+                "transport": "local",
+            },
         ],
         "collector_endpoint": settings.otel_exporter_otlp_endpoint,
         "synthetic_data_notice": "Synthetic Synthea data only.",
@@ -1136,7 +1311,12 @@ def observability_configuration(settings: Settings = Depends(get_settings)) -> d
         "metrics_enabled": settings.prometheus_metrics_enabled,
         "metrics_path": settings.prometheus_metrics_path,
         "collector_available_is_non_fatal": True,
-        "redaction": {"prompts": True, "raw_fhir": True, "credentials": True, "patient_ids_in_metrics": True},
+        "redaction": {
+            "prompts": True,
+            "raw_fhir": True,
+            "credentials": True,
+            "patient_ids_in_metrics": True,
+        },
     }
 
 
@@ -1161,7 +1341,9 @@ def resilience_certifications(actor: ActorContext = Depends(development_actor)) 
 
 
 @router.get("/api/v1/resilience/certifications/{certification_id}")
-def resilience_certification(certification_id: str, actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def resilience_certification(
+    certification_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
     with SessionLocal() as session:
         require_permission(actor, "resilience:read", session, action="resilience_read")
     for report in load_reports():
@@ -1171,7 +1353,9 @@ def resilience_certification(certification_id: str, actor: ActorContext = Depend
 
 
 @router.get("/api/v1/resilience/readiness")
-def resilience_readiness(settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+def resilience_readiness(
+    settings: Settings = Depends(get_settings), _: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
     return {
         "ready": settings.temporal_enabled and settings.crewai_execution_mode == "temporal",
         "execution_mode": settings.crewai_execution_mode,
@@ -1402,24 +1586,127 @@ def evaluations() -> dict[str, object]:
     cross = _cross_framework_output()
     items: list[dict[str, Any]] = []
     if output.get("profiles"):
-        items.append({
-            "evaluation_id": "phase2-6-bounded",
-            "dataset_id": output.get("dataset_id"),
-            "status": output.get("status", "completed"),
-            "synthetic_development_evaluation": True,
-            "not_clinically_validated": True,
-        })
+        items.append(
+            {
+                "evaluation_id": "phase2-6-bounded",
+                "dataset_id": output.get("dataset_id"),
+                "status": output.get("status", "completed"),
+                "synthetic_development_evaluation": True,
+                "not_clinically_validated": True,
+            }
+        )
     if cross.get("status") != "not_available":
-        items.append({
-            "evaluation_id": "cross-framework",
-            "dataset_id": cross.get("dataset_id"),
-            "status": cross.get("status", "completed"),
-            "synthetic_development_evaluation": True,
-            "not_clinically_validated": True,
-        })
+        items.append(
+            {
+                "evaluation_id": "cross-framework",
+                "dataset_id": cross.get("dataset_id"),
+                "status": cross.get("status", "completed"),
+                "synthetic_development_evaluation": True,
+                "not_clinically_validated": True,
+            }
+        )
     return {
         "items": items,
         "notice": "Synthetic development evaluation; not clinically validated or production performance.",
+    }
+
+
+@router.get("/api/v1/release-evaluations")
+def release_evaluations(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    actor: ActorContext = Depends(development_actor),
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="release_evaluation_read")
+        rows = list(
+            session.scalars(
+                select(ReleaseEvaluationExecution)
+                .order_by(ReleaseEvaluationExecution.created_at.desc())
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+    return {
+        "items": [_safe_model(item) for item in rows],
+        "page": page,
+        "page_size": page_size,
+        "notice": "Synthetic development release evaluation; not clinically validated.",
+    }
+
+
+@router.get("/api/v1/release-policy")
+def release_policy(actor: ActorContext = Depends(development_actor)) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="release_policy_read")
+    return {
+        "blocking_gates": {
+            name: {
+                "metric": value[0],
+                "threshold": value[1],
+                "direction": value[2],
+                "definition": value[3],
+            }
+            for name, value in BLOCKING_GATES.items()
+        },
+        "decision_values": ["approved", "blocked", "approved_with_documented_limitations"],
+        "notice": "Internal synthetic development gates; not a regulatory certification.",
+    }
+
+
+@router.get("/api/v1/release-evaluations/{evaluation_id}")
+def release_evaluation(
+    evaluation_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="release_evaluation_read")
+        item = session.get(ReleaseEvaluationExecution, evaluation_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="release evaluation not found")
+    return item.report_json
+
+
+@router.get("/api/v1/release-evaluations/{evaluation_id}/gates")
+def release_evaluation_gates(
+    evaluation_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="release_evaluation_read")
+        rows = list(
+            session.scalars(
+                select(ReleaseGateResult).where(ReleaseGateResult.evaluation_id == evaluation_id)
+            )
+        )
+    if not rows:
+        with SessionLocal() as session:
+            if session.get(ReleaseEvaluationExecution, evaluation_id) is None:
+                raise HTTPException(status_code=404, detail="release evaluation not found")
+    return {
+        "items": [_safe_model(item) for item in rows],
+        "notice": "Required development gates; not a regulatory certification.",
+    }
+
+
+@router.get("/api/v1/release-evaluations/{evaluation_id}/metrics")
+def release_evaluation_metrics(
+    evaluation_id: str, actor: ActorContext = Depends(development_actor)
+) -> dict[str, Any]:
+    with SessionLocal() as session:
+        require_permission(actor, "evaluation:read", session, action="release_evaluation_read")
+        rows = list(
+            session.scalars(
+                select(ReleaseMetricResult).where(
+                    ReleaseMetricResult.evaluation_id == evaluation_id
+                )
+            )
+        )
+    if not rows:
+        with SessionLocal() as session:
+            if session.get(ReleaseEvaluationExecution, evaluation_id) is None:
+                raise HTTPException(status_code=404, detail="release evaluation not found")
+    return {
+        "items": [_safe_model(item) for item in rows],
+        "notice": "N/A metrics are not inferred as passes.",
     }
 
 
@@ -1454,7 +1741,10 @@ def evaluation_cases(evaluation_id: str, category: str | None = None) -> dict[st
         cases = output.get("cases", [])
         if category:
             cases = [case for case in cases if case.get("category") == category]
-        return {"cases": cases, "notice": output.get("notice", "Synthetic development evaluation only.")}
+        return {
+            "cases": cases,
+            "notice": output.get("notice", "Synthetic development evaluation only."),
+        }
     if evaluation_id not in {"phase2-5-bounded", "phase2-6-bounded"}:
         raise HTTPException(status_code=404, detail="evaluation not found")
     output = _evaluation_output()
@@ -1480,7 +1770,9 @@ def _cross_framework_output() -> dict[str, Any]:
             "notice": "Synthetic development evaluation; not clinically validated or production performance.",
         }
     loaded = json.loads(path.read_text(encoding="utf-8"))
-    return loaded if isinstance(loaded, dict) else {"status": "invalid", "frameworks": {}, "cases": []}
+    return (
+        loaded if isinstance(loaded, dict) else {"status": "invalid", "frameworks": {}, "cases": []}
+    )
 
 
 @router.get("/api/v1/agents")
@@ -1495,8 +1787,13 @@ def agent_registry(_: ActorContext = Depends(development_actor)) -> dict[str, An
         item["governance_readiness"] = {
             "failed_gates": card.get("failed_gates", []),
             "evaluation_version": card.get("version"),
-            "provenance_state": "pass" if "included_patient_required_criterion_provenance_coverage" not in card.get("failed_gates", []) else "remediation_required",
-            "audit_state": "pass" if "required_audit_completeness" not in card.get("failed_gates", []) else "remediation_required",
+            "provenance_state": "pass"
+            if "included_patient_required_criterion_provenance_coverage"
+            not in card.get("failed_gates", [])
+            else "remediation_required",
+            "audit_state": "pass"
+            if "required_audit_completeness" not in card.get("failed_gates", [])
+            else "remediation_required",
             "recovery_state": agent.recovery,
         }
         enriched.append(item)
@@ -1508,7 +1805,9 @@ def agent_registry(_: ActorContext = Depends(development_actor)) -> dict[str, An
 
 @router.get("/api/v1/framework-policy")
 def framework_policy() -> dict[str, Any]:
-    path = Path(__file__).resolve().parents[4] / "evaluations/agents/framework_selection_policy.json"
+    path = (
+        Path(__file__).resolve().parents[4] / "evaluations/agents/framework_selection_policy.json"
+    )
     if not path.exists():
         return {"status": "not_available", "frameworks": {}}
     loaded = json.loads(path.read_text(encoding="utf-8"))

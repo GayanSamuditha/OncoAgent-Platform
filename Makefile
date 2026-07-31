@@ -2,10 +2,10 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate db-up db-down observability-up observability-down migrate test lint typecheck check
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report db-up db-down observability-up observability-down migrate test lint typecheck check
 
 help:
-	@printf '%s\n' 'Targets: temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate db-up db-down migrate check'
+	@printf '%s\n' 'Targets: temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report db-up db-down migrate check'
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -51,6 +51,12 @@ resilience-report:
 
 identity-validate:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/validate_phase6a_identity.py
+
+release-evaluate:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/release_evaluate.py $(if $(CANDIDATE),--candidate $(CANDIDATE),)
+
+release-report:
+	@ls -t evaluation_outputs/release/*.md 2>/dev/null | head -1 || true
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d

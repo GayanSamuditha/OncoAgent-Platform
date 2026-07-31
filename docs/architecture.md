@@ -152,6 +152,13 @@ ordered start/completion/review events. A framework-specific scorecard
 reports independent gates and limitations; it does not declare a universal
 winner.
 
+Phase 6B adds a separate release-evaluation boundary. A CLI runner consumes
+versioned candidate and suite contracts, compares measured candidate metrics
+with an explicit baseline, evaluates independent blocking gates, and persists
+sanitized historical reports. It does not execute workflows from the browser
+or alter the LangGraph, CrewAI, Temporal, MCP, identity, provenance, or
+resilience implementations.
+
 ## Phase 5B Temporal durable execution
 
 Temporal coordinates only the downstream CrewAI lifecycle. LangGraph keeps its
