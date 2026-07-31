@@ -2,10 +2,10 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report db-up db-down observability-up observability-down migrate test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify db-up db-down observability-up observability-down migrate test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
 
 help:
-	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report check'
+	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify check'
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -57,6 +57,18 @@ release-evaluate:
 
 release-report:
 	@ls -t evaluation_outputs/release/*.md 2>/dev/null | head -1 || true
+
+performance-smoke:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/performance_runner.py --profile api-read-light
+
+performance-run:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/performance_runner.py --profile "$(if $(PROFILE),$(PROFILE),api-read-concurrent)"
+
+performance-report:
+	@ls -t evaluation_outputs/performance/*.md 2>/dev/null | head -1 || true
+
+reliability-verify:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/performance_runner.py --profile retry-recovery
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d

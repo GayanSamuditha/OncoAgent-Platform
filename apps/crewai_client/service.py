@@ -1,8 +1,17 @@
 """Bounded local execution service and safe structured fallback."""
 
+import os
 import hashlib
 import json
 from typing import Any
+
+# Temporal workers are non-interactive.  Keep CrewAI's optional hosted
+# tracing/tracking flows disabled, matching the API-side local policy, so a
+# worker never blocks on a telemetry preference prompt.  This affects only
+# optional framework telemetry, not platform OpenTelemetry or audit records.
+os.environ.setdefault("CREWAI_DISABLE_TELEMETRY", "true")
+os.environ.setdefault("CREWAI_DISABLE_TRACKING", "true")
+os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
 
 from .mcp_client import MCPClientProtocol
 from .policy import validate_request

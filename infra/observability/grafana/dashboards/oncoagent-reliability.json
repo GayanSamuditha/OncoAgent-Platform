@@ -1,0 +1,15 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "panels": [
+    {"type":"timeseries","title":"Retry budget","targets":[{"expr":"oncoagent_performance_retry_budget","refId":"A"}]},
+    {"type":"timeseries","title":"Recovery duration","targets":[{"expr":"sum by (framework) (rate(oncoagent_performance_recovery_time_seconds_sum[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"Cancellation latency","targets":[{"expr":"sum by (framework) (rate(oncoagent_performance_cancellation_latency_seconds_sum[5m]))","refId":"A"}]},
+    {"type":"timeseries","title":"Development SLO status","targets":[{"expr":"oncoagent_performance_slo_status","refId":"A"}]},
+    {"type":"timeseries","title":"Overload rejections","targets":[{"expr":"sum by (queue) (rate(oncoagent_performance_overload_rejections_total[5m]))","refId":"A"}]}
+  ],
+  "schemaVersion": 39,
+  "title": "OncoAgent Reliability",
+  "uid": "oncoagent-reliability",
+  "version": 1
+}

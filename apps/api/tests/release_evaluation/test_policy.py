@@ -97,3 +97,23 @@ def test_no_baseline_does_not_create_delta() -> None:
     result = metric("overall_evidence_provenance_coverage", 0.4)
     assert result.baseline_value is None
     assert result.delta is None
+
+
+def test_unevaluated_required_workload_blocks_release() -> None:
+    from app.release_evaluation.contracts import ReleaseCandidate
+    from app.release_evaluation.service import evaluate_candidate
+
+    candidate = ReleaseCandidate(
+        candidate_id="test",
+        candidate_version="v1",
+        dataset_id="dataset",
+        evaluation_suite_version="suite",
+    )
+    report = evaluate_candidate(
+        candidate,
+        {"not_evaluable_workloads": ["retry-recovery"]},
+        None,
+        baseline_reference={"available": False},
+    )
+    assert report.decision == "blocked"
+    assert "retry-recovery" in " ".join(report.blocking_reasons)

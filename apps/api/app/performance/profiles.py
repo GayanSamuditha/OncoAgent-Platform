@@ -1,0 +1,140 @@
+"""Source-controlled, bounded workload profiles."""
+
+from app.performance.contracts import WorkloadProfile
+
+PROFILE_REGISTRY_VERSION = "7B.2"
+
+PROFILES: dict[str, WorkloadProfile] = {
+    "api-read-light": WorkloadProfile(
+        profile_id="api-read-light",
+        description="Small public health/readiness sample",
+        concurrency=1,
+        request_count=10,
+        warmup_count=2,
+        timeout_seconds=10,
+        request_mix={"health": 1.0},
+        max_memory_gb=2,
+    ),
+    "api-read-concurrent": WorkloadProfile(
+        profile_id="api-read-concurrent",
+        description="Bounded concurrent health/readiness sample",
+        concurrency=4,
+        request_count=40,
+        warmup_count=4,
+        timeout_seconds=10,
+        request_mix={"health": 0.5, "ready": 0.5},
+        max_memory_gb=4,
+    ),
+    "langgraph-cohort": WorkloadProfile(
+        profile_id="langgraph-cohort",
+        description="Bounded governed workflow creation observation",
+        concurrency=1,
+        request_count=2,
+        warmup_count=0,
+        timeout_seconds=180,
+        request_mix={"workflow_create": 1.0},
+        max_memory_gb=8,
+        expected_status_classes=["2xx", "4xx"],
+    ),
+    "crewai-temporal": WorkloadProfile(
+        profile_id="crewai-temporal",
+        description="Bounded Temporal/CrewAI submission observation",
+        concurrency=1,
+        request_count=2,
+        warmup_count=0,
+        timeout_seconds=300,
+        request_mix={"crew_create": 1.0},
+        max_memory_gb=10,
+        expected_status_classes=["2xx", "4xx", "5xx"],
+    ),
+    "mcp-read": WorkloadProfile(
+        profile_id="mcp-read",
+        description="Bounded MCP read-only observation",
+        concurrency=2,
+        request_count=10,
+        warmup_count=1,
+        timeout_seconds=30,
+        request_mix={"mcp_read": 1.0},
+        max_memory_gb=4,
+        expected_status_classes=["2xx", "4xx"],
+    ),
+    "mixed-platform": WorkloadProfile(
+        profile_id="mixed-platform",
+        description="Bounded mixed platform workflow, MCP, model, and authorization sample",
+        concurrency=2,
+        request_count=5,
+        warmup_count=3,
+        timeout_seconds=420,
+        request_mix={
+            "langgraph": 0.2,
+            "crewai": 0.2,
+            "mcp": 0.2,
+            "model": 0.2,
+            "authorization_denial": 0.2,
+        },
+        max_memory_gb=10,
+        expected_status_classes=["2xx", "4xx", "5xx"],
+    ),
+    "cancellation-load": WorkloadProfile(
+        profile_id="cancellation-load",
+        description="Bounded cancellation API observation",
+        concurrency=1,
+        request_count=2,
+        warmup_count=0,
+        timeout_seconds=60,
+        request_mix={"cancel": 1.0},
+        max_memory_gb=4,
+        expected_status_classes=["2xx", "4xx"],
+    ),
+    "retry-recovery": WorkloadProfile(
+        profile_id="retry-recovery",
+        description="Bounded retry/recovery observation using configured fault controls",
+        concurrency=1,
+        request_count=1,
+        warmup_count=0,
+        timeout_seconds=180,
+        request_mix={"recovery": 1.0},
+        max_memory_gb=8,
+        expected_status_classes=["2xx", "4xx", "5xx"],
+    ),
+    "authorization-denial": WorkloadProfile(
+        profile_id="authorization-denial",
+        description="Expected denial latency sample",
+        concurrency=2,
+        request_count=10,
+        warmup_count=1,
+        timeout_seconds=15,
+        request_mix={"forbidden_read": 1.0},
+        max_memory_gb=3,
+        expected_status_classes=["4xx"],
+    ),
+    "model-saturation": WorkloadProfile(
+        profile_id="model-saturation",
+        description="Single-slot local model reliability sample",
+        concurrency=1,
+        request_count=2,
+        warmup_count=0,
+        timeout_seconds=180,
+        request_mix={"model": 1.0},
+        max_memory_gb=10,
+        expected_status_classes=["2xx", "4xx", "5xx"],
+    ),
+    "database-pressure": WorkloadProfile(
+        profile_id="database-pressure",
+        description="Bounded authenticated database-backed API pressure sample",
+        concurrency=2,
+        request_count=12,
+        warmup_count=1,
+        timeout_seconds=30,
+        request_mix={"performance_history": 1.0},
+        max_memory_gb=4,
+        expected_status_classes=["2xx", "4xx", "5xx"],
+    ),
+}
+
+
+def get_profile(profile_id: str) -> WorkloadProfile:
+    try:
+        return PROFILES[profile_id]
+    except KeyError as exc:
+        raise ValueError(f"unknown bounded workload profile: {profile_id}") from exc
