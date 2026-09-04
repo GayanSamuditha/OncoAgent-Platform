@@ -39,7 +39,9 @@ jobs:
           npm run lint
           npm run typecheck
       - name: Sanitized source security scan
-        run: PYTHONPATH=apps/api python scripts/security_scan.py --check secrets
-        continue-on-error: true
+        run: |
+          docker pull aquasec/trivy:0.61.0
+          TRIVY_COMMAND="docker run --rm -v $GITHUB_WORKSPACE:/work:ro -w /work aquasec/trivy:0.61.0" \
+            PYTHONPATH=apps/api python scripts/security_scan.py --check all --strict
       - name: Compose validation
         run: docker compose -f infra/docker-compose.yml config --quiet

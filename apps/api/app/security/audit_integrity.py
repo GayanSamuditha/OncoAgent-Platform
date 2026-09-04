@@ -2,15 +2,20 @@
 
 import hashlib
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.identity import AccessDecisionAudit
 from app.security.contracts import AuditIntegrityResult
 
 INTEGRITY_VERSION = "sha256-chain-v1"
+# PostgreSQL advisory locks are shared across application processes.  A fixed,
+# application-specific key serializes audit-chain tip reads and appends without
+# locking unrelated tables for the duration of the request transaction.
+AUDIT_CHAIN_LOCK_ID = 1_329_743_087
 
 
 def canonical_payload(item: AccessDecisionAudit) -> dict[str, Any]:
@@ -34,6 +39,43 @@ def digest_for(item: AccessDecisionAudit) -> str:
     return hashlib.sha256(
         json.dumps(canonical_payload(item), sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
+
+
+def acquire_audit_chain_lock(session: Session) -> None:
+    """Serialize chain appends on PostgreSQL for the current transaction."""
+    if session.get_bind().dialect.name == "postgresql":
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": AUDIT_CHAIN_LOCK_ID},
+        )
+
+
+def append_audit_record(session: Session, item: AccessDecisionAudit) -> None:
+    """Append one record after the current chain tip without creating forks."""
+    acquire_audit_chain_lock(session)
+    previous = session.scalar(
+        select(AccessDecisionAudit)
+        .where(AccessDecisionAudit.canonical_digest.is_not(None))
+        .order_by(AccessDecisionAudit.created_at.desc(), AccessDecisionAudit.id.desc())
+    )
+    # PostgreSQL's ``now()`` is the transaction start time.  Leaving created_at
+    # to that server default can therefore sort two serialized appends in the
+    # opposite order when one transaction waited for the advisory lock.  Stamp
+    # the record while holding the lock and keep the timestamp monotonic so the
+    # timestamp-ordered verifier and the selected chain tip agree.
+    created_at = datetime.now(UTC)
+    if previous is not None and previous.created_at is not None:
+        previous_created_at = previous.created_at
+        if previous_created_at.tzinfo is None:
+            previous_created_at = previous_created_at.replace(tzinfo=UTC)
+        if created_at <= previous_created_at:
+            created_at = previous_created_at + timedelta(microseconds=1)
+    item.created_at = created_at
+    item.previous_digest = previous.canonical_digest if previous else None
+    item.integrity_version = INTEGRITY_VERSION
+    session.add(item)
+    session.flush()
+    item.canonical_digest = digest_for(item)
 
 
 def verify_audit_chain(session: Session) -> AuditIntegrityResult:

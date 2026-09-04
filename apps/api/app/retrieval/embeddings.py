@@ -76,11 +76,11 @@ class _TransformerProvider:
             name, revision=revision, trust_remote_code=False
         )
         try:
-            model = AutoModel.from_pretrained(
+            model = AutoModel.from_pretrained(  # nosec B615
                 name, revision=revision, trust_remote_code=False, use_safetensors=True
             )
         except OSError:
-            model = AutoModel.from_pretrained(name, revision=revision, trust_remote_code=False)
+            model = AutoModel.from_pretrained(name, revision=revision, trust_remote_code=False)  # nosec B615
         model.eval()
         model.to(self.metadata.device)
         return tokenizer, model

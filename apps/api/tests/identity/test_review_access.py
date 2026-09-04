@@ -52,6 +52,7 @@ def test_creator_cannot_decide_through_review_path(monkeypatch) -> None:
     monkeypatch.setattr(routes, "SessionLocal", lambda: SessionContext())
     monkeypatch.setattr(routes, "require_dataset", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(routes, "require_permission", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(routes, "record_access", lambda *_args, **_kwargs: None)
     before = SECURITY_SELF_APPROVAL_DENIALS._value.get()
     with pytest.raises(HTTPException) as exc:
         routes._review_authorized_crew_get("run-a", creator, deciding=True)

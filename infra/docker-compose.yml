@@ -54,6 +54,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: oncoagent-api
       LOCAL_LLM_BASE_URL: http://host.docker.internal:11434
+      CREWAI_ENABLED: ${CREWAI_ENABLED:-false}
       CREWAI_OLLAMA_BASE_URL: http://host.docker.internal:11434
       CREWAI_MCP_URL: http://mcp:8010/mcp
       CREWAI_MCP_CLIENT_ID: ${CREWAI_MCP_CLIENT_ID:-}
@@ -272,6 +273,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-local}
       TEMPORAL_ADDRESS: temporal:7233
       CREWAI_EXECUTION_MODE: temporal
+      CREWAI_ENABLED: ${CREWAI_ENABLED:-false}
       CREWAI_DISABLE_TELEMETRY: ${CREWAI_DISABLE_TELEMETRY:-true}
       CREWAI_DISABLE_TRACKING: ${CREWAI_DISABLE_TRACKING:-true}
       CREWAI_TRACING_ENABLED: ${CREWAI_TRACING_ENABLED:-false}

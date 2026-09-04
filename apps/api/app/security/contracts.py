@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 SecuritySeverity = Literal["informational", "low", "medium", "high", "critical"]
 FindingState = Literal["open", "accepted_risk", "remediated", "false_positive", "not_applicable"]
-EvidenceStatus = Literal["measured", "passed", "failed", "not_evaluable", "not_applicable"]
+EvidenceStatus = Literal["measured", "passed", "failed", "not_evaluable", "error", "not_applicable"]
 
 
 class SecurityPolicy(BaseModel):
@@ -95,7 +95,7 @@ class IncidentReadinessCheck(BaseModel):
 class SecurityAssessment(BaseModel):
     assessment_id: str
     policy_version: str
-    status: Literal["passed", "failed", "not_evaluable"]
+    status: Literal["passed", "failed", "not_evaluable", "error"]
     created_at: datetime
     control_results: list[SecurityControlResult] = Field(default_factory=list)
     findings: list[SecurityFinding] = Field(default_factory=list)
@@ -116,7 +116,7 @@ class RetentionRule(BaseModel):
 
 
 class AuditIntegrityResult(BaseModel):
-    status: Literal["verified", "legacy_unverified", "failed", "not_evaluable"]
+    status: Literal["verified", "legacy_unverified", "failed", "not_evaluable", "error"]
     checked_records: int
     legacy_records: int
     changed_records: list[str] = Field(default_factory=list)

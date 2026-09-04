@@ -18,7 +18,9 @@ make verify-platform
 worker and Next.js images. Ollama remains host-based on Apple Silicon; set
 `LOCAL_LLM_BASE_URL` and `CREWAI_OLLAMA_BASE_URL` to its host endpoint. The
 recommended profile disables legacy identity headers and development fault
-injection.
+injection. It also keeps CrewAI disabled until MCP service credentials and a
+synthetic dataset allowlist are configured; `make demo-up` prepares those local
+demo settings before enabling the integration.
 
 ## Profiles and endpoints
 
@@ -56,6 +58,19 @@ dataset presence and patient counts without printing clinical records.
 Use `make platform-status`, `make platform-logs`, and `make verify-platform`
 for bounded inspection. `make platform-clean` preserves volumes by default;
 destructive volume removal requires `ALLOW_DESTRUCTIVE_CLEAN=1`.
+
+Do not use destructive Compose or Docker-wide cleanup commands. For a clean
+security baseline, use the isolated `validation-create` workflow instead. It
+backs up and verifies the running `oncoagent` application database, then uses
+a separate timestamped Compose project and PostgreSQL volume. Use
+`make validation-down VALIDATION_PROJECT=<exact-project>` to stop that project;
+it does not remove volumes.
+
+Generated test/build reports can be previewed with
+`make artifacts-clean-dry-run`. Applying the explicit repository-relative
+allowlist requires `CONFIRM_ARTIFACT_CLEAN=YES make artifacts-clean`; secrets,
+backups, raw Synthea data, model files, audit evidence, uploads, and Docker
+volumes are protected.
 
 `make backup-databases BACKUP_DIR=backups/<name>` writes ignored SQL dumps for
 application and, when running, Temporal PostgreSQL. Restore requires both an

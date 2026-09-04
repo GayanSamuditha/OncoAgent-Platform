@@ -12,4 +12,6 @@ from app.security.audit_integrity import verify_audit_chain
 with SessionLocal() as session:
     result = verify_audit_chain(session)
 print(json.dumps(result.model_dump(mode="json"), sort_keys=True))
-raise SystemExit(1 if result.status == "failed" else 0)
+# This is a required security gate: legacy evidence is reported explicitly
+# and must not be treated as a successful verification.
+raise SystemExit(0 if result.status == "verified" else 1)

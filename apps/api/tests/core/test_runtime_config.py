@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from app.core.config import Settings
 from app.core.runtime_config import validate_runtime_settings
+
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def test_local_defaults_are_valid_for_api() -> None:
@@ -51,3 +55,21 @@ def test_worker_requires_complete_crewai_mcp_configuration() -> None:
         "CREWAI_MCP_TOKEN",
         "CREWAI_MCP_DATASET_IDS",
     }.issubset(fields)
+
+
+def test_compose_profiles_only_enable_crewai_when_credentials_are_prepared() -> None:
+    compose = (ROOT / "infra/docker-compose.yml").read_text(encoding="utf-8")
+    local_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    demo_example = (ROOT / ".env.demo.example").read_text(encoding="utf-8")
+    demo_preparation = (ROOT / "scripts/prepare_demo_env.py").read_text(encoding="utf-8")
+
+    api_service = compose.split("  api:\n", 1)[1].split("  mcp:\n", 1)[0]
+    worker_service = compose.split("  temporal-worker:\n", 1)[1].split(
+        "  otel-collector:\n", 1
+    )[0]
+
+    assert api_service.count("CREWAI_ENABLED: ${CREWAI_ENABLED:-false}") == 1
+    assert worker_service.count("CREWAI_ENABLED: ${CREWAI_ENABLED:-false}") == 1
+    assert "CREWAI_ENABLED=false" in local_example
+    assert "CREWAI_ENABLED=true" in demo_example
+    assert '\"CREWAI_ENABLED\": \"true\"' in demo_preparation

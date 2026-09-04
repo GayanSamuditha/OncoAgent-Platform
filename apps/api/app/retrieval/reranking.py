@@ -42,14 +42,14 @@ class MedCPTRerankerProvider:
                 trust_remote_code=False,
             )
             try:
-                self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
                     self.metadata.model_name,
                     revision=self.metadata.model_revision,
                     trust_remote_code=False,
                     use_safetensors=True,
                 )
             except OSError:
-                self.model = AutoModelForSequenceClassification.from_pretrained(
+                self.model = AutoModelForSequenceClassification.from_pretrained(  # nosec B615
                     self.metadata.model_name,
                     revision=self.metadata.model_revision,
                     trust_remote_code=False,

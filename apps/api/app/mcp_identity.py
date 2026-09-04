@@ -55,10 +55,10 @@ def configured_clients(settings: Settings) -> dict[str, MCPClientIdentity]:
             continue
         if actor_role not in {"researcher", "reviewer", "admin", "service"}:
             continue
-        assert isinstance(client_id, str)
-        assert isinstance(token, str)
-        assert isinstance(actor_id, str)
-        assert isinstance(actor_role, str)
+        assert isinstance(client_id, str)  # nosec B101
+        assert isinstance(token, str)  # nosec B101
+        assert isinstance(actor_id, str)  # nosec B101
+        assert isinstance(actor_role, str)  # nosec B101
         result[client_id] = MCPClientIdentity(
             client_id,
             token,

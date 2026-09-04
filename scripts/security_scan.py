@@ -9,9 +9,12 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shlex
 import shutil
 import subprocess
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -75,28 +78,106 @@ def scan_patterns(patterns: dict[str, re.Pattern[str]]) -> list[dict[str, str]]:
     return findings
 
 
-def command_observation(command: list[str], name: str) -> dict[str, Any]:
-    executable = shutil.which(command[0])
+def _version_command(command: list[str]) -> list[str]:
+    if command[:3] == [sys.executable, "-m", "pip_audit"]:
+        return [sys.executable, "-m", "pip_audit", "--version"]
+    if command[:3] == [sys.executable, "-m", "bandit"]:
+        return [sys.executable, "-m", "bandit", "--version"]
+    if command[0] == "docker":
+        try:
+            return command[: command.index("fs")] + ["--version"]
+        except ValueError:
+            return command + ["--version"]
+    return [command[0], "--version"]
+
+
+def _trivy_command() -> list[str]:
+    configured = os.getenv("TRIVY_COMMAND", "trivy")
+    return shlex.split(configured)
+
+
+def _parse_findings(payload: str, parser: str) -> int:
+    data = json.loads(payload)
+    if parser == "pip-audit":
+        dependencies = data.get("dependencies", []) if isinstance(data, dict) else data
+        return sum(len(item.get("vulns", [])) for item in dependencies if isinstance(item, dict))
+    if parser == "bandit":
+        return len(data.get("results", [])) if isinstance(data, dict) else 0
+    if parser == "trivy":
+        return sum(
+            len(result.get("Vulnerabilities") or [])
+            for result in data.get("Results", [])
+            if isinstance(result, dict)
+        )
+    if parser == "npm":
+        vulnerabilities = data.get("metadata", {}).get("vulnerabilities", {})
+        return sum(
+            int(value)
+            for key, value in vulnerabilities.items()
+            if key != "total" and isinstance(value, int)
+        )
+    raise ValueError(f"unknown scanner parser: {parser}")
+
+
+def command_observation(command: list[str], name: str, parser: str) -> dict[str, Any]:
+    executable = shutil.which(command[0]) if command[0] != sys.executable else command[0]
     if executable is None:
         return {
             "name": name,
             "status": "not_evaluable",
             "reason": f"{command[0]} is unavailable",
         }
-    completed = subprocess.run(
-        command, cwd=ROOT, capture_output=True, text=True, timeout=120, check=False
-    )
+    try:
+        version = subprocess.run(
+            _version_command(command), cwd=ROOT, capture_output=True, text=True, timeout=30, check=False
+        )
+        completed = subprocess.run(
+            command, cwd=ROOT, capture_output=True, text=True, timeout=120, check=False
+        )
+    except subprocess.TimeoutExpired:
+        return {"name": name, "status": "error", "reason": "scanner timed out"}
+    except OSError:
+        return {"name": name, "status": "not_evaluable", "reason": "scanner transport unavailable"}
+    tool_version = version.stdout.strip().splitlines()[0][:120] if version.returncode == 0 and version.stdout.strip() else None
+    if version.returncode != 0 and command[0] == sys.executable:
+        return {
+            "name": name,
+            "status": "not_evaluable",
+            "reason": "scanner module is unavailable in the active interpreter",
+        }
+    try:
+        findings = _parse_findings(completed.stdout, parser)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return {
+            "name": name,
+            "status": "error",
+            "exit_code": completed.returncode,
+            "tool_version": tool_version,
+            "reason": "scanner output was malformed; raw output omitted",
+        }
+    if completed.returncode not in {0, 1}:
+        status = "error"
+        reason = "scanner returned an unexpected exit code; output omitted"
+    elif findings:
+        status = "failed"
+        reason = "policy findings detected; raw output omitted"
+    elif completed.returncode == 1:
+        status = "error"
+        reason = "scanner reported failure without parseable findings"
+    else:
+        status = "passed"
+        reason = None
     return {
         "name": name,
-        "status": "passed" if completed.returncode == 0 else "not_evaluable",
+        "status": status,
         "exit_code": completed.returncode,
-        "reason": None
-        if completed.returncode == 0
-        else "scanner did not complete; output is intentionally omitted",
+        "finding_count": findings,
+        "tool_version": tool_version,
+        "reason": reason,
     }
 
 
-def run_scan(kind: str) -> dict[str, Any]:
+def run_scan(kind: str, strict: bool = False) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     if kind in {"all", "secrets"}:
         secret_findings = scan_patterns(SECRET_PATTERNS)
@@ -120,17 +201,17 @@ def run_scan(kind: str) -> dict[str, Any]:
         checks.extend(
             [
                 command_observation(
-                    ["pip-audit", "--format", "json"], "python_dependency_scan"
+                    [sys.executable, "-m", "pip_audit", "--format", "json"], "python_dependency_scan", "pip-audit"
                 ),
                 command_observation(
-                    ["npm", "audit", "--omit=dev", "--json"], "node_dependency_scan"
+                    ["npm", "--prefix", "apps/web", "audit", "--omit=dev", "--json"], "node_dependency_scan", "npm"
                 ),
                 command_observation(
-                    ["bandit", "-r", "apps/api/app", "-q"], "static_security_scan"
+                    [sys.executable, "-m", "bandit", "-r", "apps/api/app", "-q", "-f", "json"], "static_security_scan", "bandit"
                 ),
                 command_observation(
-                    ["trivy", "fs", "--scanners", "vuln", "--format", "json", "."],
-                    "container_dependency_scan",
+                    [*_trivy_command(), "fs", "--scanners", "vuln", "--format", "json", "--exit-code", "1", "."],
+                    "container_dependency_scan", "trivy"
                 ),
             ]
         )
@@ -138,11 +219,14 @@ def run_scan(kind: str) -> dict[str, Any]:
         "report_version": "phase7c-security-scan-v1",
         "created_at": datetime.now(UTC).isoformat(),
         "environment": "local_development",
-        "status": "passed"
-        if all(item["status"] == "passed" for item in checks)
+        "status": "error"
+        if any(item["status"] == "error" for item in checks)
+        else "failed"
+        if any(item["status"] == "failed" for item in checks)
         else "not_evaluable"
         if any(item["status"] == "not_evaluable" for item in checks)
-        else "failed",
+        else "passed",
+        "strict": strict,
         "checks": checks,
         "limitations": [
             "Synthetic development data only.",
@@ -232,8 +316,9 @@ def main() -> int:
         "--check", choices=["all", "secrets", "privacy", "dependencies"], default="all"
     )
     parser.add_argument("--persist", action="store_true")
+    parser.add_argument("--strict", action="store_true")
     args = parser.parse_args()
-    result = run_scan(args.check)
+    result = run_scan(args.check, strict=args.strict)
     json_path, md_path = write_report(result)
     assessment_id = persist_assessment(result, json_path) if args.persist else None
     print(
@@ -247,9 +332,7 @@ def main() -> int:
             }
         )
     )
-    return (
-        0 if result["status"] == "passed" else 1 if result["status"] == "failed" else 2
-    )
+    return {"passed": 0, "failed": 1, "not_evaluable": 2, "error": 3}[result["status"]]
 
 
 if __name__ == "__main__":

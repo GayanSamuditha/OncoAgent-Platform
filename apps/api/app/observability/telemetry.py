@@ -34,7 +34,7 @@ def configure(settings: Settings) -> None:
     try:
         exporter = OTLPSpanExporter(endpoint=settings.otel_exporter_otlp_endpoint, insecure=True, timeout=3)
         provider.add_span_processor(BatchSpanProcessor(exporter))
-    except Exception:
+    except Exception:  # nosec B110
         # Tracing must not prevent application startup.
         pass
     trace.set_tracer_provider(provider)

@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import jwt
 from fastapi import HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -32,7 +32,7 @@ from app.observability.metrics import (
     observe_unsafe_prevention,
 )
 from app.observability.telemetry import current_trace_context
-from app.security.audit_integrity import INTEGRITY_VERSION, digest_for
+from app.security.audit_integrity import append_audit_record
 
 LOCAL_USERS: dict[str, tuple[str, str]] = {
     "researcher-console": ("researcher", "Synthetic Researcher"),
@@ -42,6 +42,11 @@ LOCAL_USERS: dict[str, tuple[str, str]] = {
     "auditor-console": ("auditor", "Audit Reader"),
     "admin-console": ("administrator", "Local Administrator"),
 }
+
+# Local identity setup creates a user, role, dataset grants, and reviewer
+# assignments as one transaction.  Serialize that development-only bootstrap
+# across API workers so concurrent logins cannot race on the unique grants.
+LOCAL_IDENTITY_BOOTSTRAP_LOCK_ID = 1_329_743_088
 
 
 @dataclass(frozen=True)
@@ -98,6 +103,11 @@ def ensure_local_user(session: Session, settings: Settings, user_key: str) -> Au
     if profile is None:
         raise HTTPException(status_code=401, detail="unknown local identity")
     role_name, display_name = profile
+    if session.get_bind().dialect.name == "postgresql":
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_id)"),
+            {"lock_id": LOCAL_IDENTITY_BOOTSTRAP_LOCK_ID},
+        )
     user = session.scalar(
         select(User).where(
             User.issuer == settings.identity_issuer, User.external_subject == user_key
@@ -257,15 +267,6 @@ def record_access(
     correlation_id: str | None = None,
 ) -> None:
     trace = current_trace_context()
-    previous = (
-        session.scalar(
-            select(AccessDecisionAudit)
-            .where(AccessDecisionAudit.canonical_digest.is_not(None))
-            .order_by(AccessDecisionAudit.created_at.desc(), AccessDecisionAudit.id.desc())
-        )
-        if hasattr(session, "scalar")
-        else None
-    )
     item = AccessDecisionAudit(
         id=str(uuid4()),
         actor_id=user.internal_id if user else None,
@@ -277,13 +278,8 @@ def record_access(
         correlation_id=correlation_id,
         trace_id=trace.get("trace_id"),
         details={},
-        previous_digest=previous.canonical_digest if previous else None,
-        integrity_version=INTEGRITY_VERSION,
     )
-    session.add(item)
-    if hasattr(session, "flush"):
-        session.flush()
-        item.canonical_digest = digest_for(item)
+    append_audit_record(session, item)
     session.commit()
 
 

@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import time
 from typing import Any
 
 # Temporal workers are non-interactive.  Keep CrewAI's optional hosted
@@ -32,7 +33,9 @@ class CrewExecutionService:
 
     def deterministic_run(self, request: CrewRunRequest, run_id: str) -> SyntheticResearchBrief:
         """A safe non-generative fallback used when CrewAI/Ollama is unavailable."""
+        task_durations_seconds: dict[str, float] = {}
         query = request.research_question
+        started = time.perf_counter()
         search = self.client.call(
             "search_clinical_documents",
             {
@@ -46,6 +49,9 @@ class CrewExecutionService:
         patient_ids = list(
             dict.fromkeys(str(item.get("patient_id")) for item in items if item.get("patient_id"))
         )[: request.maximum_candidates]
+        task_durations_seconds["candidate_discovery"] = time.perf_counter() - started
+
+        started = time.perf_counter()
         evidence: list[dict[str, Any]] = []
         for patient_id in patient_ids:
             result = self.client.call(
@@ -64,6 +70,17 @@ class CrewExecutionService:
                     "tool_name": result.tool_name,
                 }
             )
+        task_durations_seconds["structured_evidence_collection"] = (
+            time.perf_counter() - started
+        )
+
+        started = time.perf_counter()
+        proposed_included_count = 0
+        proposed_excluded_count = len(patient_ids)
+        unresolved_count = len(patient_ids)
+        task_durations_seconds["eligibility_evidence_review"] = time.perf_counter() - started
+
+        started = time.perf_counter()
         brief = SyntheticResearchBrief(
             run_id=run_id,
             dataset_id=request.dataset_id,
@@ -75,9 +92,9 @@ class CrewExecutionService:
                 "fallbacks": search.result.get("retrieval_fallbacks", []),
             },
             candidate_count=len(patient_ids),
-            proposed_included_count=0,
-            proposed_excluded_count=len(patient_ids),
-            unresolved_count=len(patient_ids),
+            proposed_included_count=proposed_included_count,
+            proposed_excluded_count=proposed_excluded_count,
+            unresolved_count=unresolved_count,
             patient_summaries=evidence,
             evidence_limitations=["Deterministic fallback does not make inclusion decisions."],
             provenance_summary={
@@ -90,6 +107,15 @@ class CrewExecutionService:
             review_status="awaiting_human_review",
         )
         validate_brief(brief, run_id, request.dataset_id, evidence=None)
+        task_durations_seconds["research_brief_generation"] = time.perf_counter() - started
+        self.last_execution.update(
+            {
+                "task_durations_seconds": task_durations_seconds,
+                "task_statuses": {
+                    task_name: "completed" for task_name in task_durations_seconds
+                },
+            }
+        )
         return brief
 
     def run(self, request: CrewRunRequest, run_id: str) -> SyntheticResearchBrief:

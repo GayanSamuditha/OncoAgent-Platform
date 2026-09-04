@@ -334,13 +334,13 @@ Full scenario registry and gate definitions: [`docs/resilience.md`](docs/resilie
 
 | Check | Result |
 | --- | --- |
-| Backend test suite (`pytest`) | **163 passed**, 0 failed, exit code 0 |
+| Backend test suite (`make test`) | Reproducible locally; run the command for the current result |
 | Backend lint (`ruff`) | All checks passed |
 | Backend types (`mypy`) | No issues in 97 source files |
 | Frontend types (`tsc --noEmit`) | Clean |
 | Frontend lint (`eslint`) | Clean |
 | Frontend production build (`next build`) | Compiled successfully — 21 routes generated |
-| Full platform verification (`scripts/verify_platform.py`) | **15/15 checks passed** (health, readiness, MCP, Postgres, Temporal, Ollama, OTel, Prometheus, Tempo, Grafana, identity login round-trip, release-gate API, RBAC denial) |
+| Full platform verification (`make verify-platform`) | Required checks are reported directly; Ollama and observability checks are optional unless `VERIFY_PLATFORM_REQUIRE_OPTIONAL=1` |
 | Demo readiness check (`demo_orchestrator.py check`) | All checks passed (MCP registry/token/dataset scoping, canonical host, Temporal worker, auth round-trip) |
 
 Backend tests span **13 functional domains** across 39 test files: workflow, identity, security, MCP, retrieval, resilience, Temporal, CrewAI, ingestion, performance, release evaluation, observability, and core services. A GitHub Actions workflow ([`.github/workflows/security.yml`](.github/workflows/security.yml)) runs the backend suite, lint, type checks, frontend lint/types, and a sanitized secret scan on every push and pull request.
@@ -461,6 +461,10 @@ make verify-platform      # 15 bounded health/readiness/authorization checks
 # 3. Run it
 open http://127.0.0.1:3000
 ```
+
+The default local profile keeps CrewAI disabled until MCP service credentials and a
+synthetic dataset allowlist are configured. `make demo-up` prepares an ignored local
+credential file and enables the integration for the governed demo workflow.
 
 For component-by-component startup (`make backend-dev`, `make frontend-dev`, `make db-up`, `make temporal-up`, `make observability-up`), the local Qwen planner, and bounded Synthea import, see [`docs/deployment.md`](docs/deployment.md) and the per-capability docs linked throughout this README.
 

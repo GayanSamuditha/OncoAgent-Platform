@@ -22,7 +22,7 @@ def validate_runtime_settings(settings: Settings, *, service: str = "api") -> li
     if database.scheme not in {"postgresql", "postgresql+psycopg"} or not database.hostname:
         issues.append(ConfigIssue("DATABASE_URL", "must be a PostgreSQL URL with a hostname"))
     if settings.environment not in {"local", "test"}:
-        if settings.identity_signing_secret == "local-development-only-change-me":
+        if settings.identity_signing_secret == "local-development-only-change-me":  # nosec B105
             issues.append(
                 ConfigIssue(
                     "IDENTITY_SIGNING_SECRET", "placeholder is not allowed outside local/test"

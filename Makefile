@@ -2,10 +2,10 @@ SHELL := /bin/zsh
 API_DIR := apps/api
 WEB_DIR := apps/web
 
-.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify security-verify retention-dry-run db-up db-down observability-up observability-down migrate demo-up demo-down demo-status demo-check demo-prepare demo-populate demo-populate-research demo-populate-operations demo-guided demo-auto demo-record demo-report demo-reset load-check load-smoke load-baseline load-sustained load-burst load-mcp load-langgraph load-crewai load-governance load-retry load-recovery load-cancel load-overload load-slo load-all load-status load-report load-grafana-capture test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases
+.PHONY: help install backend-dev frontend-dev mcp-dev mcp-stdio crewai-install temporal-worker temporal-up temporal-schema temporal-down temporal-status resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan security-tools-install secret-scan dependency-scan privacy-scan audit-integrity-verify security-verify retention-dry-run db-up db-down observability-up observability-down migrate demo-up demo-down demo-status demo-check demo-prepare demo-populate demo-populate-research demo-populate-operations demo-guided demo-auto demo-record demo-report demo-reset load-check load-smoke load-baseline load-sustained load-burst load-mcp load-langgraph load-crewai load-governance load-retry load-recovery load-cancel load-overload load-slo load-all load-status load-report load-grafana-capture test lint typecheck check validate-config platform-up platform-down platform-status platform-logs platform-clean seed-synthetic verify-data verify-platform backup-databases restore-databases validation-create validation-down artifacts-clean-dry-run artifacts-clean ollama-check ollama-prepare
 
 help:
-	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify retention-dry-run security-verify check'
+	@printf '%s\n' 'Targets: platform-up platform-down platform-status platform-logs platform-clean validate-config migrate seed-synthetic verify-data verify-platform backup-databases restore-databases validation-create validation-down artifacts-clean-dry-run artifacts-clean ollama-check ollama-prepare temporal-up temporal-schema temporal-status temporal-worker resilience-certify resilience-report identity-validate release-evaluate release-report performance-smoke performance-run performance-report reliability-verify security-scan secret-scan dependency-scan privacy-scan audit-integrity-verify retention-dry-run security-verify check'
 
 install:
 	python3.12 -m venv $(API_DIR)/.venv
@@ -70,14 +70,19 @@ performance-report:
 reliability-verify:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/performance_runner.py --profile retry-recovery
 
+security-tools-install:
+	$(API_DIR)/.venv/bin/pip install -e '$(API_DIR)[dev]'
+	docker pull aquasec/trivy:0.61.0
+	cd $(WEB_DIR) && npm install --package-lock-only --ignore-scripts
+
 security-scan:
-	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check all
+	TRIVY_COMMAND="docker run --rm -v $$(pwd):/work:ro -w /work aquasec/trivy:0.61.0" PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check all --strict
 
 secret-scan:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check secrets
 
 dependency-scan:
-	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check dependencies
+	TRIVY_COMMAND="docker run --rm -v $$(pwd):/work:ro -w /work aquasec/trivy:0.61.0" PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check dependencies --strict
 
 privacy-scan:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_scan.py --check privacy
@@ -88,7 +93,8 @@ audit-integrity-verify:
 retention-dry-run:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/security_retention.py
 
-security-verify: secret-scan privacy-scan audit-integrity-verify retention-dry-run
+security-verify:
+	@set +e; rc=0; for target in secret-scan privacy-scan dependency-scan audit-integrity-verify retention-dry-run; do $(MAKE) --no-print-directory "$$target"; code=$$?; if [ $$code -gt $$rc ]; then rc=$$code; fi; done; exit $$rc
 
 db-up:
 	docker compose -f infra/docker-compose.yml up -d
@@ -236,6 +242,27 @@ backup-databases:
 
 restore-databases:
 	@if [ "$${CONFIRM_RESTORE:-}" != "YES" ]; then echo 'Refusing restore. Set CONFIRM_RESTORE=YES and BACKUP_DIR explicitly.'; exit 2; fi; test -n "$${BACKUP_DIR:-}"; test -f "$${BACKUP_DIR}/application.sql"; docker compose -f infra/docker-compose.yml exec -T postgres psql -U "$${POSTGRES_USER:-oncoagent}" -d "$${POSTGRES_DB:-oncoagent}" < "$${BACKUP_DIR}/application.sql"; if [ -f "$${BACKUP_DIR}/temporal.sql" ] && docker compose -f infra/docker-compose.yml ps -q temporal-postgresql | grep -q .; then docker compose -f infra/docker-compose.yml exec -T temporal-postgresql psql -U temporal -d temporal < "$${BACKUP_DIR}/temporal.sql"; fi
+
+validation-create:
+	CONFIRM_VALIDATION_CREATE=$${CONFIRM_VALIDATION_CREATE:-} PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/validation_database.py --env-file "$${VALIDATION_SOURCE_ENV_FILE:-.env.demo}"
+
+validation-down:
+	@if [ -z "$${VALIDATION_PROJECT:-}" ]; then echo 'Set VALIDATION_PROJECT to the exact validation Compose project; no volume removal is performed.'; exit 2; fi
+	docker compose -p "$${VALIDATION_PROJECT}" --env-file "$${VALIDATION_SOURCE_ENV_FILE:-.env.demo}" -f infra/docker-compose.yml stop postgres
+
+artifacts-clean-dry-run:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/cleanup_artifacts.py --dry-run
+
+artifacts-clean:
+	@if [ "$${CONFIRM_ARTIFACT_CLEAN:-}" != "YES" ]; then echo 'Refusing artifact cleanup. Set CONFIRM_ARTIFACT_CLEAN=YES explicitly.'; exit 2; fi
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/cleanup_artifacts.py --apply
+
+ollama-check:
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/ollama_check.py
+
+ollama-prepare:
+	@if [ "$${CONFIRM_OLLAMA_SETUP:-}" != "YES" ]; then echo 'Refusing Ollama setup. Set CONFIRM_OLLAMA_SETUP=YES explicitly.'; exit 2; fi
+	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/ollama_check.py --prepare
 
 test:
 	cd $(API_DIR) && .venv/bin/pytest

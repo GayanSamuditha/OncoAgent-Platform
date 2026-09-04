@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -20,6 +21,19 @@ def test_local_login_sets_session_and_returns_server_side_role() -> None:
         current = client.get("/api/v1/auth/me")
         assert current.status_code == 200
         assert current.json()["subject"] == "researcher-console"
+
+
+def test_concurrent_local_logins_do_not_race_on_dataset_grants() -> None:
+    def login() -> int:
+        with TestClient(app) as client:
+            return client.post(
+                "/api/v1/auth/login", json={"user_key": "researcher-console"}
+            ).status_code
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        statuses = list(executor.map(lambda _: login(), range(8)))
+
+    assert statuses == [200] * 8
 
 
 def test_missing_authentication_is_rejected_for_protected_endpoint() -> None:

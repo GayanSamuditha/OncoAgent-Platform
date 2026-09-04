@@ -4,7 +4,8 @@ FROM python:3.12.11-slim-bookworm AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
 WORKDIR /build
 
 RUN python -m pip install --upgrade pip==25.1.1

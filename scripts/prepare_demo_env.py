@@ -51,6 +51,7 @@ def main() -> int:
     ]
     values = {
         "CREWAI_MCP_CLIENT_ID": CLIENT_ID,
+        "CREWAI_ENABLED": "true",
         "CREWAI_MCP_URL": "http://mcp:8010/mcp",
         "CREWAI_MCP_TOKEN": token,
         "CREWAI_MCP_DATASET_IDS": DATASET_ID,

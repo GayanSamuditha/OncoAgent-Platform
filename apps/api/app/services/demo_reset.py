@@ -28,7 +28,7 @@ from app.models import (
     WorkflowStep,
     WorkflowToolCall,
 )
-from app.security.audit_integrity import digest_for
+from app.security.audit_integrity import append_audit_record
 
 
 def validate_demo_id(demo_id: str) -> str:
@@ -137,17 +137,8 @@ def reset_demo_records(session: Session, demo_id: str) -> dict[str, int]:
         reason_code="explicit_demo_reset_confirmation",
         correlation_id=demo_id,
         details={"deleted_record_counts": dict(counts)},
-        integrity_version="sha256-chain-v1",
     )
-    previous = session.scalar(
-        select(AccessDecisionAudit)
-        .where(AccessDecisionAudit.canonical_digest.is_not(None))
-        .order_by(AccessDecisionAudit.created_at.desc(), AccessDecisionAudit.id.desc())
-    )
-    audit.previous_digest = previous.canonical_digest if previous else None
-    session.add(audit)
-    session.flush()
-    audit.canonical_digest = digest_for(audit)
+    append_audit_record(session, audit)
     return counts
 
 

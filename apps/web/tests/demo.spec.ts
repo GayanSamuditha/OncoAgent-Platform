@@ -23,9 +23,13 @@ test.describe("populated synthetic client demonstration", () => {
     expect(new URL(page.url()).origin).toBe("http://127.0.0.1:3000");
     await page.locator("#user-key").selectOption("researcher-console");
     const [loginResponse, meResponse] = await Promise.all([
-      page.waitForResponse((response) => response.url().endsWith("/api/v1/auth/login")),
+      page.waitForResponse((response) =>
+        response.url().endsWith("/backend/api/v1/auth/login"),
+      ),
       page.waitForResponse(
-        (response) => response.url().endsWith("/api/v1/auth/me") && response.status() === 200,
+        (response) =>
+          response.url().endsWith("/backend/api/v1/auth/me") &&
+          response.status() === 200,
       ),
       page.getByRole("button", { name: "Sign in" }).click(),
     ]);
