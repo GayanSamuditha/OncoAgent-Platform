@@ -2,9 +2,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import jwt
+import pytest
+from crewai_client.schemas import CrewRunRequest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.core.config import get_settings
+from app.api.routes import create_crew_run
+from app.core.config import Settings, get_settings
+from app.identity.service import AuthenticatedUser
 from app.main import app
 
 
@@ -99,3 +104,31 @@ def test_crew_request_cannot_replace_authenticated_actor_context() -> None:
             },
         )
         assert response.status_code == 403
+
+
+def test_tampered_crew_actor_context_is_rejected_before_disabled_check() -> None:
+    request = CrewRunRequest.model_validate(
+        {
+            "dataset_id": "synthetic-dataset",
+            "research_question": "Find synthetic adults with hypertension",
+            "structured_criteria": [
+                {"criterion_type": "condition", "clinical_concept": "hypertension"}
+            ],
+            "actor_context": {"actor_id": "admin-console", "actor_role": "admin"},
+        }
+    )
+    actor = AuthenticatedUser(
+        internal_id="user-1",
+        subject="researcher-console",
+        issuer="http://testserver/local-oidc",
+        display_name="Synthetic Researcher",
+        email=None,
+        role="researcher",
+        permissions=frozenset(),
+        dataset_ids=frozenset(),
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        create_crew_run(request, actor, Settings(crewai_enabled=False))
+
+    assert exc_info.value.status_code == 403

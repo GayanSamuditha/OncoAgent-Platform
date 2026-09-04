@@ -428,6 +428,16 @@ def create_crew_run(
     actor: ActorContext = Depends(development_actor),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
+    if (
+        request.actor_context.actor_id != actor.actor_id
+        or request.actor_context.actor_role != actor.role
+    ):
+        # Validate the caller-supplied actor context before checking optional
+        # integration availability. The authenticated session is authoritative
+        # and tampering must consistently produce an authorization denial.
+        raise HTTPException(
+            status_code=403, detail="request actor context does not match authenticated identity"
+        )
     if not settings.crewai_enabled:
         raise HTTPException(status_code=503, detail="CrewAI is disabled by platform policy")
     if not settings.crewai_mcp_client_id or not settings.crewai_mcp_token:
@@ -435,16 +445,6 @@ def create_crew_run(
     with SessionLocal() as session:
         require_permission(actor, "workflow:create", session, action="crew_run_create")
         require_dataset(actor, request.dataset_id, session, action="crew_run_create")
-    if (
-        request.actor_context.actor_id != actor.actor_id
-        or request.actor_context.actor_role != actor.role
-    ):
-        # The authenticated session is authoritative.  Rejecting a mismatch
-        # makes privilege-escalation attempts explicit while preserving a
-        # sanitized contract for every accepted request.
-        raise HTTPException(
-            status_code=403, detail="request actor context does not match authenticated identity"
-        )
     if actor.role not in {"researcher", "reviewer", "administrator"}:
         raise HTTPException(
             status_code=403, detail="identity is not authorized to run CrewAI research"
