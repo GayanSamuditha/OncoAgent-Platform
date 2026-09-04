@@ -7,7 +7,9 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 def test_local_defaults_are_valid_for_api() -> None:
-    assert validate_runtime_settings(Settings(crewai_enabled=False), service="api") == []
+    assert Settings.model_fields["crewai_enabled"].default is False
+    settings = Settings(crewai_enabled=False)
+    assert validate_runtime_settings(settings, service="api") == []
 
 
 def test_non_local_placeholder_secret_is_rejected() -> None:
@@ -32,6 +34,7 @@ def test_fault_injection_is_rejected_outside_local() -> None:
 
 def test_api_requires_nonempty_crewai_mcp_token() -> None:
     settings = Settings(
+        crewai_enabled=True,
         crewai_mcp_client_id="crewai-oncology-research",
         crewai_mcp_token="",
         crewai_mcp_dataset_ids="dataset-a",
@@ -43,6 +46,7 @@ def test_api_requires_nonempty_crewai_mcp_token() -> None:
 
 def test_worker_requires_complete_crewai_mcp_configuration() -> None:
     settings = Settings(
+        crewai_enabled=True,
         crewai_mcp_client_id="",
         crewai_mcp_token="",
         crewai_mcp_dataset_ids="",

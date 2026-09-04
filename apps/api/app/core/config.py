@@ -123,7 +123,7 @@ class Settings(BaseSettings):
     local_planner_max_output_tokens: int = Field(
         default=1024, ge=64, le=4096, validation_alias="LOCAL_PLANNER_MAX_OUTPUT_TOKENS"
     )
-    crewai_enabled: bool = Field(default=True, validation_alias="CREWAI_ENABLED")
+    crewai_enabled: bool = Field(default=False, validation_alias="CREWAI_ENABLED")
     crewai_default_model: str = Field(
         default="llama3.2:3b", validation_alias="CREWAI_DEFAULT_MODEL"
     )

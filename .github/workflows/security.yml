@@ -11,6 +11,24 @@ permissions:
 jobs:
   security:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://oncoagent:oncoagent_dev@localhost:5432/oncoagent
+      ENVIRONMENT: test
+      CREWAI_ENABLED: "false"
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: oncoagent
+          POSTGRES_USER: oncoagent
+          POSTGRES_PASSWORD: oncoagent_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oncoagent -d oncoagent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -27,6 +45,9 @@ jobs:
       - name: Install frontend dependencies
         working-directory: apps/web
         run: npm ci
+      - name: Initialize test database
+        working-directory: apps/api
+        run: python -m alembic -c alembic.ini upgrade head
       - name: Tests and static checks
         run: |
           cd apps/api
