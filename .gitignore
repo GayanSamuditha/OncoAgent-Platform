@@ -281,3 +281,7 @@ temporal-data/
 prometheus-data/
 tempo-data/
 grafana-data/
+
+# Frontend source helper; the generic lib/ rule above must not hide it.
+!apps/web/app/lib/
+!apps/web/app/lib/api.ts
