@@ -26,7 +26,7 @@ mcp-stdio:
 	PYTHONPATH=apps/api $(API_DIR)/.venv/bin/python -m apps.mcp_server.server --transport stdio
 
 crewai-install:
-	$(API_DIR)/.venv/bin/pip install -e apps/crewai_client
+	$(API_DIR)/.venv/bin/pip install -e 'apps/crewai_client[crewai]'
 
 temporal-worker:
 	PYTHONPATH=$(API_DIR) $(API_DIR)/.venv/bin/python scripts/run_temporal_worker.py

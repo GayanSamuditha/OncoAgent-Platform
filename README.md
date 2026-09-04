@@ -452,6 +452,8 @@ scripts/             Verification, evaluation, security, and demo-orchestration 
 # 1. Configure and install
 cp .env.example .env
 make install
+# Optional downstream CrewAI integration (requires its separate vendor stack)
+# make crewai-install
 
 # 2. Bring up the full local stack (Postgres, API, MCP, web, Temporal, observability)
 make platform-up

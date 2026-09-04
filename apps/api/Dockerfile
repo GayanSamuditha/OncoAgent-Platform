@@ -8,7 +8,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
 WORKDIR /build
 
-RUN python -m pip install --upgrade pip==25.1.1
+RUN python -m pip install --upgrade pip==26.2.1
 COPY apps/api/pyproject.toml /build/apps/api/
 COPY apps/crewai_client/pyproject.toml /build/apps/crewai_client/
 COPY apps/api/app /build/apps/api/app
@@ -16,7 +16,7 @@ COPY apps/crewai_client /build/apps/crewai_client
 COPY apps/mcp_server /build/apps/mcp_server
 
 RUN python -m pip wheel --no-cache-dir --wheel-dir /wheels \
-    /build/apps/api /build/apps/crewai_client
+    /build/apps/api '/build/apps/crewai_client[crewai]'
 
 FROM python:3.12.11-slim-bookworm AS runtime
 
@@ -29,7 +29,7 @@ WORKDIR /opt/oncoagent
 
 RUN groupadd --system --gid 10001 oncoagent \
     && useradd --system --uid 10001 --gid 10001 --create-home --home-dir /home/oncoagent oncoagent \
-    && python -m pip install --no-cache-dir --upgrade pip==25.1.1
+    && python -m pip install --no-cache-dir --upgrade pip==26.2.1
 COPY --from=builder /wheels /wheels
 RUN python -m pip install --no-cache-dir /wheels/*.whl \
     && rm -rf /wheels

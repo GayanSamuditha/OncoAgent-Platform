@@ -6,7 +6,17 @@ build-backend = "setuptools.build_meta"
 name = "oncoagent-crewai-client"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["crewai==1.15.7", "mcp>=1.28,<2", "pydantic>=2.11,<3", "httpx>=0.28,<1"]
+# CrewAI is a downstream integration. Keep its vendor stack out of the
+# default platform install; CrewAI currently requires an unfixed Chroma 1.1.x.
+dependencies = [
+  "mcp>=1.28,<2",
+  "pydantic>=2.11,<3",
+  "httpx>=0.28,<1",
+  "cryptography>=50,<51",
+]
+
+[project.optional-dependencies]
+crewai = ["crewai==1.15.7"]
 
 [tool.setuptools.packages.find]
 where = [".."]

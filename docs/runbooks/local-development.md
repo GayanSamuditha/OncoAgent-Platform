@@ -3,6 +3,8 @@
 ```bash
 cp .env.example .env
 make install
+# Optional downstream CrewAI integration:
+# make crewai-install
 make db-up
 make migrate
 make backend-dev

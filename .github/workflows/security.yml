@@ -39,8 +39,10 @@ jobs:
           node-version: "22"
       - name: Install backend dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade 'pip>=26.2'
           python -m pip install -e 'apps/api[dev]'
+          # CrewAI is disabled here and remains an explicit downstream extra;
+          # its current Chroma requirement has no fixed release yet.
           python -m pip install -e apps/crewai_client
       - name: Install frontend dependencies
         working-directory: apps/web
